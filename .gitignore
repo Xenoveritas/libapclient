@@ -1,0 +1,5 @@
+# Visual Studio defaults to out so whatever
+/out
+
+# Also ignore build
+/build
