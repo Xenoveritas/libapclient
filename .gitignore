@@ -1,5 +1,11 @@
 # Visual Studio defaults to out so whatever
 /out
 
+# Ignore Visual Studio's junk
+/.vs
+
+# Ignore macOS's junk
+.DS_*
+
 # Also ignore build
 /build
