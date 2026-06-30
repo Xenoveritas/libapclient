@@ -42,15 +42,15 @@ std::filesystem::path getPlayerArchipelagoCacheDirectory() {
         throw std::runtime_error("SHGetKnownFolderPath lookup failed");
     }
     // Path will handle character encoding for us
-    std::filesystem::path result(std::wstring(localAppDataPath));
+    std::filesystem::path result{ std::wstring(localAppDataPath) };
     // Free the Windows buffer
     CoTaskMemFree(localAppDataPath);
     // Now just append \Archipelago\Cache:
-    result /= "Archipelago\\Cache";
+    result /= std::string("Archipelago\\Cache");
     return result;
 #else
     // Get it via the environment
-    std::filesystem::path result(std::getenv("HOME"));
+    std::filesystem::path result{ std::getenv("HOME") };
 #  if defined(__APPLE__)
     // For now, just always use ~/Library/Caches. There's a way to look it up
     // via NSSearchPathForDirectoriesInDomains but that would involve bridging
