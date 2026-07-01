@@ -530,7 +530,7 @@ public:
      *
      * The default implementation does nothing.
      */
-    virtual void onLocationInfo(packets::LocationInfo& locationInfo) {}
+    virtual void onLocationInfo(const packets::LocationInfo& locationInfo) {}
 
     /*! \brief Receive an update to the room info.
      *
@@ -539,7 +539,7 @@ public:
      *
      * The default implementation does nothing.
      */
-    virtual void onRoomUpdate(packets::RoomUpdate& roomUpdate) {}
+    virtual void onRoomUpdate(const packets::RoomUpdate& roomUpdate) {}
 
     /*! \brief Receive text that's intended to be displayed to the user.
      *

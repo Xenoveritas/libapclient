@@ -317,12 +317,24 @@ void Client::dispatchPacket(const std::string& command, const json& packet) {
         onReceivedItems((const packets::ReceivedItems)packet);
     } else if (command == packets::kPacketPrintJSON) {
         onPrintJSON((const packets::PrintJSON)packet);
+    } else if (command == packets::kPacketLocationInfo) {
+        onLocationInfo((const packets::LocationInfo)packet);
+    } else if (command == packets::kPacketRoomUpdate) {
+        onRoomUpdate((const packets::RoomUpdate)packet);
+    } else if (command == packets::kPacketBounced) {
+        onBounced((const packets::Bounced)packet);
+    } else if (command == packets::kPacketRetrieved) {
+        onRetrieved((const packets::Retrieved)packet);
+    } else if (command == packets::kPacketSetReply) {
+        onSetReply((const packets::SetReply)packet);
+    } else if (command == packets::kPacketDataPackage) {
+        onDataPackage((const packets::DataPackage)packet);
     } else if (command == packets::kPacketRoomInfo) {
         const auto roomInfo = (const packets::RoomInfo)packet;
         {
             // Grab the lock while updating
             std::lock_guard lock(m_mutex);
-            if (m_state == ClientState::connecting) {
+            if (m_state == ClientState::websocketConnected) {
                 m_state = ClientState::receivedRoomInfo;
                 m_roomInfo = roomInfo;
             }

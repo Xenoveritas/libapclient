@@ -19,8 +19,24 @@ namespace packets {
 // These macros mostly exist for typo/copy-paste protection (since the JSON
 // field and the C++ field are the same).
 /// \cond
+// Macro expansion is ... anyway, this allows std::map<foo COMMA bar> in type fields
+#define COMMA ,
 #define READ_FIELD(json_object, object, field) json_object.at(#field).get_to(object.field)
-#define READ_OPTIONAL_FIELD(json_object, object, field) { auto _iter = json_object.find(#field); if (_iter != json_object.end()) { object.field = *_iter; } }
+#define READ_OPTIONAL_FIELD(json_object, object, type, field) { \
+    auto _iter = json_object.find(#field); \
+    if (_iter != json_object.end()) { \
+        type _v = *_iter; \
+        object.field = _v; \
+    } \
+}
+#define READ_FIELD_IF_EXISTS(json_object, object, field, blank) { \
+    auto _iter = json_object.find(#field); \
+    if (_iter == json_object.end()) { \
+        object.field = blank; \
+    } else { \
+        object.field = (*_iter); \
+    } \
+}
 
 #define WRITE_FIELD(object, field) { #field, object.field }
 #define ADD_FIELD(json_object, object, field) json_object[#field] = object.field
@@ -51,6 +67,52 @@ bool ConnectionRefused::has_error(const std::string& error) const {
 //
 // These are alphabetized to keep the order somewhat understandable.
 /// \cond
+void from_json(const json& j, Bounce& bounce) {
+    READ_OPTIONAL_FIELD(j, bounce, std::vector<std::string>, games);
+    READ_OPTIONAL_FIELD(j, bounce, std::vector<player_id_t>, slots);
+    READ_OPTIONAL_FIELD(j, bounce, std::vector<std::string>, tags);
+    READ_OPTIONAL_FIELD(j, bounce, json, data);
+}
+
+void Bounce::convert_to_json(json& j) const {
+    OBJ_ADD_FIELD_IF_EXISTS(j, games);
+    OBJ_ADD_FIELD_IF_EXISTS(j, slots);
+    OBJ_ADD_FIELD_IF_EXISTS(j, tags);
+    OBJ_ADD_FIELD_IF_EXISTS(j, data);
+}
+
+DEFER_TO_CLASS(Bounce);
+
+void from_json(const json& j, Bounced& bounced) {
+    READ_OPTIONAL_FIELD(j, bounced, std::vector<std::string>, games);
+    READ_OPTIONAL_FIELD(j, bounced, std::vector<player_id_t>, slots);
+    READ_OPTIONAL_FIELD(j, bounced, std::vector<std::string>, tags);
+    READ_FIELD(j, bounced, data);
+}
+
+void Bounced::convert_to_json(json& j) const {
+    j = {
+        OBJ_ADD_FIELD(j, data)
+    };
+    OBJ_ADD_FIELD_IF_EXISTS(j, games);
+    OBJ_ADD_FIELD_IF_EXISTS(j, slots);
+    OBJ_ADD_FIELD_IF_EXISTS(j, tags);
+}
+
+DEFER_TO_CLASS(Bounced);
+
+void from_json(const json& j, Connect& connect) {
+    READ_FIELD(j, connect, name);
+    // game and password are "optional" in that they're required but the value may sometimes be null.
+    j.at("game").get_to(*connect.game);
+    j.at("password").get_to(*connect.password);
+    READ_FIELD(j, connect, uuid);
+    READ_FIELD(j, connect, version);
+    READ_FIELD(j, connect, items_handling);
+    READ_FIELD(j, connect, tags);
+    READ_FIELD(j, connect, slot_data);
+}
+
 void Connect::convert_to_json(json& j) const {
     j = json{
         OBJ_WRITE_FIELD(name),
@@ -65,6 +127,8 @@ void Connect::convert_to_json(json& j) const {
     };
 }
 
+DEFER_TO_CLASS(Connect);
+
 void from_json(const json& j, Connected& connected) {
     READ_FIELD(j, connected, team);
     READ_FIELD(j, connected, slot);
@@ -72,7 +136,7 @@ void from_json(const json& j, Connected& connected) {
     READ_FIELD(j, connected, missing_locations);
     READ_FIELD(j, connected, checked_locations);
     // Slot data can be entirely missing
-    READ_OPTIONAL_FIELD(j, connected, slot_data);
+    READ_OPTIONAL_FIELD(j, connected, std::unordered_map<std::string COMMA std::string>, slot_data);
     READ_FIELD(j, connected, slot_info);
     READ_FIELD(j, connected, hint_points);
 }
@@ -90,6 +154,8 @@ void Connected::convert_to_json(json& j) const {
     };
 }
 
+DEFER_TO_CLASS(Connected);
+
 void from_json(const json& j, ConnectionRefused& connectionRefused) {
     READ_FIELD(j, connectionRefused, errors);
 }
@@ -100,13 +166,43 @@ void ConnectionRefused::convert_to_json(json& j) const {
     };
 }
 
+DEFER_TO_CLASS(ConnectionRefused);
+
+void from_json(const json& j, ConnectUpdate& connectUpdate) {
+    READ_FIELD(j, connectUpdate, items_handling);
+    READ_FIELD(j, connectUpdate, tags);
+}
+
+void ConnectUpdate::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(items_handling),
+        OBJ_WRITE_FIELD(tags)
+    };
+}
+
+DEFER_TO_CLASS(ConnectUpdate);
+
+void from_json(const json& j, CreateHints& createHints) {
+    READ_FIELD(j, createHints, locations);
+    READ_FIELD(j, createHints, player);
+    READ_OPTIONAL_FIELD(j, createHints, HintStatus, status);
+}
+
+void CreateHints::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(locations),
+        OBJ_WRITE_FIELD(player)
+    };
+    OBJ_ADD_FIELD_IF_EXISTS(j, status);
+}
+
+DEFER_TO_CLASS(CreateHints);
+
 void from_json(const json& j, DataPackage& dataPackage) {
     // This is something like { "data": { "games": (actual JSON) } }
     // Rather than mirror the single-key-object, just extract the games part
     j.at("data").at("games").get_to(dataPackage.games);
 }
-
-DEFER_TO_CLASS(DataPackage);
 
 void DataPackage::convert_to_json(json& j) const {
     j = json{
@@ -116,6 +212,142 @@ void DataPackage::convert_to_json(json& j) const {
     };
 }
 
+DEFER_TO_CLASS(DataPackage);
+
+void from_json(const json& j, DataStorageOperation& dataStorageOperation) {
+    READ_FIELD(j, dataStorageOperation, operation);
+    READ_FIELD(j, dataStorageOperation, value);
+}
+
+void to_json(json& j, const DataStorageOperation& dataStorageOperation) {
+    j = {
+        WRITE_FIELD(dataStorageOperation, operation),
+        WRITE_FIELD(dataStorageOperation, value)
+    };
+}
+
+void from_json(const json& j, DataStorageOperationType& dataStorageOperationType) {
+    // Operation is actually a string
+    const std::string& jsonType = static_cast<const std::string&>(j);
+    if (jsonType == "replace") {
+        dataStorageOperationType = DataStorageOperationType::opReplace;
+    } else if (jsonType == "default") {
+        dataStorageOperationType = DataStorageOperationType::opDefault;
+    } else if (jsonType == "add") {
+        dataStorageOperationType = DataStorageOperationType::opAdd;
+    } else if (jsonType == "mul") {
+        dataStorageOperationType = DataStorageOperationType::opMul;
+    } else if (jsonType == "pow") {
+        dataStorageOperationType = DataStorageOperationType::opPow;
+    } else if (jsonType == "mod") {
+        dataStorageOperationType = DataStorageOperationType::opMod;
+    } else if (jsonType == "floor") {
+        dataStorageOperationType = DataStorageOperationType::opFloor;
+    } else if (jsonType == "ceil") {
+        dataStorageOperationType = DataStorageOperationType::opCeil;
+    } else if (jsonType == "max") {
+        dataStorageOperationType = DataStorageOperationType::opMax;
+    } else if (jsonType == "min") {
+        dataStorageOperationType = DataStorageOperationType::opMin;
+    } else if (jsonType == "and") {
+        dataStorageOperationType = DataStorageOperationType::opAnd;
+    } else if (jsonType == "or") {
+        dataStorageOperationType = DataStorageOperationType::opOr;
+    } else if (jsonType == "xor") {
+        dataStorageOperationType = DataStorageOperationType::opXor;
+    } else if (jsonType == "leftShift") {
+        dataStorageOperationType = DataStorageOperationType::opLeftShift;
+    } else if (jsonType == "rightShift") {
+        dataStorageOperationType = DataStorageOperationType::opRightShift;
+    } else if (jsonType == "remove") {
+        dataStorageOperationType = DataStorageOperationType::opRemove;
+    } else if (jsonType == "pop") {
+        dataStorageOperationType = DataStorageOperationType::opPop;
+    } else if (jsonType == "update") {
+        dataStorageOperationType = DataStorageOperationType::opUpdate;
+    }
+}
+
+void to_json(json& j, const DataStorageOperationType& dataStorageOperationType) {
+    switch (dataStorageOperationType) {
+    case DataStorageOperationType::opReplace:
+        j = "replace";
+        break;
+    case DataStorageOperationType::opDefault:
+        j = "default";
+        break;
+    case DataStorageOperationType::opAdd:
+        j = "add";
+        break;
+    case DataStorageOperationType::opMul:
+        j = "mul";
+        break;
+    case DataStorageOperationType::opPow:
+        j = "pow";
+        break;
+    case DataStorageOperationType::opMod:
+        j = "mod";
+        break;
+    case DataStorageOperationType::opFloor:
+        j = "floor";
+        break;
+    case DataStorageOperationType::opCeil:
+        j = "ceil";
+        break;
+    case DataStorageOperationType::opMax:
+        j = "max";
+        break;
+    case DataStorageOperationType::opMin:
+        j = "min";
+        break;
+    case DataStorageOperationType::opAnd:
+        j = "and";
+        break;
+    case DataStorageOperationType::opOr:
+        j = "or";
+        break;
+    case DataStorageOperationType::opXor:
+        j = "xor";
+        break;
+    case DataStorageOperationType::opLeftShift:
+        j = "leftShift";
+        break;
+    case DataStorageOperationType::opRightShift:
+        j = "rightShift";
+        break;
+    case DataStorageOperationType::opRemove:
+        j = "remove";
+        break;
+    case DataStorageOperationType::opPop:
+        j = "pop";
+        break;
+    case DataStorageOperationType::opUpdate:
+        j = "update";
+        break;
+    default:
+        // something is wrong in this case
+        j = nullptr;
+    }
+}
+
+void from_json(const json& j, Get& get) {
+    READ_FIELD(j, get, keys);
+    READ_FIELD(j, get, extra);
+}
+
+void Get::convert_to_json(json& j) const {
+    j = {
+        OBJ_WRITE_FIELD(keys),
+        OBJ_WRITE_FIELD(extra)
+    };
+}
+
+DEFER_TO_CLASS(Get);
+
+void from_json(const json& j, GetDataPackage& getDataPackage) {
+    READ_OPTIONAL_FIELD(j, getDataPackage, std::vector<std::string>, games);
+}
+
 void GetDataPackage::convert_to_json(json& j) const {
     // This really could be an (almost) empty object
     j = json::object();
@@ -123,9 +355,11 @@ void GetDataPackage::convert_to_json(json& j) const {
     OBJ_ADD_FIELD_IF_EXISTS(j, games);
 }
 
+DEFER_TO_CLASS(GetDataPackage);
+
 void from_json(const json& j, InvalidPacket& invalidPacket) {
     READ_FIELD(j, invalidPacket, type);
-    READ_OPTIONAL_FIELD(j, invalidPacket, original_cmd);
+    READ_OPTIONAL_FIELD(j, invalidPacket, std::string, original_cmd);
     READ_FIELD(j, invalidPacket, text);
 }
 
@@ -137,13 +371,15 @@ void InvalidPacket::convert_to_json(json& j) const {
     OBJ_ADD_FIELD_IF_EXISTS(j, original_cmd);
 }
 
+DEFER_TO_CLASS(InvalidPacket);
+
 void from_json(const json& j, JSONMessagePart& jsonMessagePart) {
     // Everything in this object is optional
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, type);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, text);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, color);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, flags);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, player);
+    READ_OPTIONAL_FIELD(j, jsonMessagePart, std::string, type);
+    READ_OPTIONAL_FIELD(j, jsonMessagePart, std::string, text);
+    READ_OPTIONAL_FIELD(j, jsonMessagePart, std::string, color);
+    READ_OPTIONAL_FIELD(j, jsonMessagePart, int, flags);
+    READ_OPTIONAL_FIELD(j, jsonMessagePart, player_id_t, player);
     // TODO: READ_OPTIONAL_FIELD(j, jsonMessagePart, hint_status);
 }
 
@@ -157,7 +393,7 @@ void to_json(json& j, const JSONMessagePart& jsonMessagePart) {
 }
 
 void from_json(const json& j, LocationChecks& locationChecks) {
-    j.at("locations").get_to(locationChecks.locations);
+    READ_FIELD(j, locationChecks, locations);
 }
 
 void LocationChecks::convert_to_json(json& j) const {
@@ -165,6 +401,34 @@ void LocationChecks::convert_to_json(json& j) const {
         OBJ_WRITE_FIELD(locations)
     };
 }
+
+DEFER_TO_CLASS(LocationChecks);
+
+void from_json(const json& j, LocationInfo& locationInfo) {
+    READ_FIELD(j, locationInfo, locations);
+}
+
+void LocationInfo::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(locations)
+    };
+}
+
+DEFER_TO_CLASS(LocationInfo);
+
+void from_json(const json& j, LocationScouts& locationScouts) {
+    READ_FIELD(j, locationScouts, locations);
+    READ_FIELD(j, locationScouts, create_as_hint);
+}
+
+void LocationScouts::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(locations),
+        OBJ_WRITE_FIELD(create_as_hint)
+    };
+}
+
+DEFER_TO_CLASS(LocationScouts);
 
 void from_json(const json& j, NetworkItem& item) {
     READ_FIELD(j, item, item);
@@ -238,20 +502,15 @@ void to_json(json& j, const NetworkVersion& version) {
 
 void from_json(const json& j, PrintJSON& printJSON) {
     READ_FIELD(j, printJSON, data);
-    READ_OPTIONAL_FIELD(j, printJSON, type);
-    READ_OPTIONAL_FIELD(j, printJSON, receiving);
-    READ_OPTIONAL_FIELD(j, printJSON, item);
-    READ_OPTIONAL_FIELD(j, printJSON, found);
-    READ_OPTIONAL_FIELD(j, printJSON, team);
-    READ_OPTIONAL_FIELD(j, printJSON, slot);
-    READ_OPTIONAL_FIELD(j, printJSON, message);
-    // Tags doesn't quite work with the macro
-    auto tagsIt = j.find("tags");
-    if (tagsIt != j.end()) {
-        std::vector<std::string> tags = *tagsIt;
-        printJSON.tags = tags;
-    }
-    READ_OPTIONAL_FIELD(j, printJSON, countdown);
+    READ_FIELD_IF_EXISTS(j, printJSON, type, PrintJsonType::none);
+    READ_OPTIONAL_FIELD(j, printJSON, player_id_t, receiving);
+    READ_OPTIONAL_FIELD(j, printJSON, NetworkItem, item);
+    READ_OPTIONAL_FIELD(j, printJSON, bool, found);
+    READ_OPTIONAL_FIELD(j, printJSON, team_id_t, team);
+    READ_OPTIONAL_FIELD(j, printJSON, team_slot_id_t, slot);
+    READ_OPTIONAL_FIELD(j, printJSON, std::string, message);
+    READ_OPTIONAL_FIELD(j, printJSON, std::vector<std::string>, tags);
+    READ_OPTIONAL_FIELD(j, printJSON, int, countdown);
 }
 
 DEFER_TO_CLASS(PrintJSON);
@@ -381,6 +640,34 @@ void ReceivedItems::convert_to_json(json& j) const {
     };
 }
 
+DEFER_TO_CLASS(ReceivedItems);
+
+void from_json(const json& j, Retrieved& retrieved) {
+    READ_FIELD(j, retrieved, keys);
+}
+
+void Retrieved::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(keys)
+    };
+}
+
+DEFER_TO_CLASS(Retrieved);
+
+void from_json(const json& j, RoomInfo& roomInfo) {
+    READ_FIELD(j, roomInfo, version);
+    READ_FIELD(j, roomInfo, generator_version);
+    READ_FIELD(j, roomInfo, tags);
+    READ_FIELD(j, roomInfo, password);
+    READ_FIELD(j, roomInfo, permissions);
+    READ_FIELD(j, roomInfo, hint_cost);
+    READ_FIELD(j, roomInfo, location_check_points);
+    READ_FIELD(j, roomInfo, games);
+    READ_FIELD(j, roomInfo, datapackage_checksums);
+    READ_FIELD(j, roomInfo, seed_name);
+    READ_FIELD(j, roomInfo, time);
+}
+
 void RoomInfo::convert_to_json(json& j) const {
     j = json{
         OBJ_WRITE_FIELD(version),
@@ -399,19 +686,23 @@ void RoomInfo::convert_to_json(json& j) const {
 
 DEFER_TO_CLASS(RoomInfo);
 
-void from_json(const json& j, RoomInfo& roomInfo) {
-    READ_FIELD(j, roomInfo, version);
-    READ_FIELD(j, roomInfo, generator_version);
-    READ_FIELD(j, roomInfo, tags);
-    READ_FIELD(j, roomInfo, password);
-    READ_FIELD(j, roomInfo, permissions);
-    READ_FIELD(j, roomInfo, hint_cost);
-    READ_FIELD(j, roomInfo, location_check_points);
-    READ_FIELD(j, roomInfo, games);
-    READ_FIELD(j, roomInfo, datapackage_checksums);
-    READ_FIELD(j, roomInfo, seed_name);
-    READ_FIELD(j, roomInfo, time);
+void from_json(const json& j, RoomUpdate& roomUpdate) {
+    READ_OPTIONAL_FIELD(j, roomUpdate, int, hint_points);
+    READ_OPTIONAL_FIELD(j, roomUpdate, int, location_check_points);
+    READ_OPTIONAL_FIELD(j, roomUpdate, std::vector<NetworkPlayer>, players);
+    READ_OPTIONAL_FIELD(j, roomUpdate, std::vector<location_id_t>, checked_locations);
+    READ_OPTIONAL_FIELD(j, roomUpdate, std::unordered_map<std::string COMMA Permission>, permissions);
 }
+
+void RoomUpdate::convert_to_json(json& j) const {
+    OBJ_ADD_FIELD_IF_EXISTS(j, hint_points);
+    OBJ_ADD_FIELD_IF_EXISTS(j, location_check_points);
+    OBJ_ADD_FIELD_IF_EXISTS(j, players);
+    OBJ_ADD_FIELD_IF_EXISTS(j, checked_locations);
+    OBJ_ADD_FIELD_IF_EXISTS(j, permissions);
+}
+
+DEFER_TO_CLASS(RoomUpdate);
 
 void from_json(const json& j, Say& say) {
     READ_FIELD(j, say, text);
@@ -422,6 +713,56 @@ void Say::convert_to_json(json& j) const {
         OBJ_WRITE_FIELD(text)
     };
 }
+
+DEFER_TO_CLASS(Say);
+
+void from_json(const json& j, Set& set) {
+    READ_FIELD(j, set, key);
+    j.at("default").get_to(set.default_value);
+    READ_FIELD(j, set, want_reply);
+    READ_FIELD(j, set, operations);
+}
+
+void Set::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(key),
+        { "default", default_value },
+        OBJ_WRITE_FIELD(want_reply),
+        OBJ_WRITE_FIELD(operations)
+    };
+}
+
+DEFER_TO_CLASS(Set);
+
+void from_json(const json& j, SetNotify& setNotify) {
+    READ_FIELD(j, setNotify, keys);
+}
+
+void SetNotify::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(keys)
+    };
+}
+
+DEFER_TO_CLASS(SetNotify);
+
+void from_json(const json& j, SetReply& setReply) {
+    READ_FIELD(j, setReply, key);
+    READ_FIELD(j, setReply, value);
+    READ_OPTIONAL_FIELD(j, setReply, json, original_value);
+    READ_FIELD(j, setReply, slot);
+}
+
+void SetReply::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(key),
+        OBJ_WRITE_FIELD(value),
+        OBJ_WRITE_FIELD(slot)
+    };
+    OBJ_ADD_FIELD_IF_EXISTS(j, original_value);
+}
+
+DEFER_TO_CLASS(SetReply);
 
 void to_json(json& j, const SlotInfo& slotInfo) {
     // Start with a blank object.
@@ -448,6 +789,34 @@ void StatusUpdate::convert_to_json(json& j) const {
         OBJ_WRITE_FIELD(status)
     };
 }
+
+DEFER_TO_CLASS(StatusUpdate);
+
+void from_json(const json& j, Sync& sync) {
+    // There's no payload to decode, so this really is a no-op
+}
+
+void Sync::convert_to_json(json& j) const {
+    j = json::object();
+}
+
+DEFER_TO_CLASS(Sync);
+
+void from_json(const json& j, UpdateHint& updateHint) {
+    READ_FIELD(j, updateHint, player);
+    READ_FIELD(j, updateHint, location);
+    READ_OPTIONAL_FIELD(j, updateHint, HintStatus, status);
+}
+
+void UpdateHint::convert_to_json(json& j) const {
+    j = json{
+        OBJ_WRITE_FIELD(player),
+        OBJ_WRITE_FIELD(location)
+    };
+    OBJ_ADD_FIELD_IF_EXISTS(j, status);
+}
+
+DEFER_TO_CLASS(UpdateHint);
 /// \endcond
 
 } // namespace packets

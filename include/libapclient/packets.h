@@ -1,5 +1,36 @@
 /*! \file packets.h
- * \brief Data structures that the Archipelago client/server send each other
+ * \brief Data structures that the Archipelago client/server send each other.
+ * 
+ * This contains the definitions for the following packets:
+ * 
+ * | Packet Name       | Sent By | Notes                                 |
+ * |-------------------|---------|---------------------------------------|
+ * | Bounced           | Server  | Bounced message (see Bounce)          |
+ * | Connect           | Client  | Client connection request             |
+ * | Connected         | Server  | Indicates connection is complete      |
+ * | ConnectionRefused | Server  | When a connection error happens       |
+ * | DataPackage       | Server  | Data package                          |
+ * | InvalidPacket     | Server  | Error message about a bad packet      |
+ * | LocationInfo      | Server  | LocationScout response                |
+ * | PrintJSON         | Server  | Text message                          |
+ * | ReceivedItems     | Server  | Items from other worlds               |
+ * | RoomInfo          | Server  | Basic room info                       |
+ * | RoomUpdate        | Server  | Update to room info (eg, hint points) |
+ * | Retrieved         | Server  | Server response for a Get             |
+ * | SetReply          | Server  | Server response for a Set             |
+ * | Bounce            | Client  |                                       |
+ * | ConnectUpdate     | Client  |                                       |
+ * | CreateHints       | Client  |                                       |
+ * | Get               | Client  |                                       |
+ * | GetDataPackage    | Client  | Only valid before sending Connect     |
+ * | LocationChecks    | Client  |                                       |
+ * | LocationScouts    | Client  |                                       |
+ * | Say               | Client  |                                       |
+ * | Set               | Client  |                                       |
+ * | SetNotify         | Client  |                                       |
+ * | StatusUpdate      | Client  |                                       |
+ * | Sync              | Client  | Has no payload                        |
+ * | UpdateHint        | Client  |                                       |
  */
 
 #ifndef LIBAPCLIENT_PACKETS_H_
@@ -291,7 +322,7 @@ public:
      */
     bool has_error(const char* error) const { return has_error(std::string(error)); }
 
-    virtual void convert_to_json(json& j) const;
+    virtual void convert_to_json(json& j) const override;
 
     // The following are static constants that describe error codes that exist within the Archipelago 0.6.7 server
 
@@ -468,23 +499,26 @@ public:
 /*! \brief A response to a LocationScouts packet. Provides information on the
  * locations requested.
  */
-class LocationInfo {
+class LocationInfo : public Packet {
+public:
     /// \brief Contains list of item(s) in the location(s) scouted.
     std::vector<NetworkItem> locations;
+    LocationInfo() : Packet(kPacketLocationInfo) {}
+    virtual void convert_to_json(json & j) const override;
 };
 
 /*! \brief the status of a hint
  */
 enum class HintStatus {
-    /// @brief The receiving player has not specified any status
+    /// \brief The receiving player has not specified any status
     HINT_UNSPECIFIED = 0,
-    /// @brief The receiving player has specified that the item is unneeded
+    /// \brief The receiving player has specified that the item is unneeded
     HINT_NO_PRIORITY = 10,
-    /// @brief The receiving player has specified that the item is detrimental
+    /// \brief The receiving player has specified that the item is detrimental
     HINT_AVOID = 20,
-    /// @brief The receiving player has specified that the item is needed
+    /// \brief The receiving player has specified that the item is needed
     HINT_PRIORITY = 30,
-    /// @brief The location has been collected. Status cannot be changed once found.
+    /// \brief The location has been collected. Status cannot be changed once found.
     HINT_FOUND = 40
 };
 
@@ -591,7 +625,7 @@ public:
     std::optional<std::string> text;
     std::optional<std::string> color;
     std::optional<int> flags;
-    std::optional<int> player;
+    std::optional<player_id_t> player;
     std::optional<HintStatus> hint_status;
 };
 
@@ -632,14 +666,16 @@ public:
  */
 class Bounced : public Packet {
 public:
-    /// @brief Game names this message is targeting
+    /// \brief Game names this message is targeting
     std::optional<std::vector<std::string>> games;
-    // Player slot IDs that this message is targeting
-    std::optional<std::vector<int>>  slots;
-    // Client Tags this message is targeting
+    /// \brief Player slot IDs that this message is targeting
+    std::optional<std::vector<team_slot_id_t>> slots;
+    /// \brief Client Tags this message is targeting
     std::optional<std::vector<std::string>> tags;
+    /// \brief The actual data sent
     json data;
     Bounced() : Packet(kPacketBounced) {}
+    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief Sent to clients to provide what is known as a "data package" which
@@ -652,8 +688,13 @@ public:
 class DataPackage : public Packet {
 public:
     DataPackage() : Packet(kPacketDataPackage), games() {}
-    // So data is actually a map of game name to data packet. Rather than reprent that,
-    // just skip past it on deserialization and add it back on serialization.
+    /*! \brief The data packages for each game.
+     *
+     * The JSON generated for this places the games within a single JSON field
+     * called "data". Rather than represent that in C++, this handles that
+     * detail during conversion to/from JSON and otherwise just stores the
+     * games map.
+     */
     std::unordered_map<std::string, json> games;
     virtual void convert_to_json(json& j) const override;
 };
@@ -661,11 +702,11 @@ public:
 /// @brief Sent to clients if the server caught a problem with a packet. This only occurs for errors that are explicitly checked for.
 class InvalidPacket : public Packet {
 public:
-    /// @brief The PacketProblemType that was detected in the packet.
+    /// \brief The PacketProblemType that was detected in the packet.
     std::string type{};
-    /// @brief The cmd argument of the faulty packet, will be unset if the cmd failed to be parsed.
+    /// \brief The cmd argument of the faulty packet, will be unset if the cmd failed to be parsed.
     std::optional<std::string> original_cmd{};
-    /// A descriptive message of the problem at hand.
+    /// \brief A descriptive message of the problem at hand.
     std::string text{};
     InvalidPacket() : Packet(kPacketInvalidPacket) {}
     InvalidPacket(const std::string& type, const std::string& text) : Packet(kPacketInvalidPacket), type(type), text(text) {}
@@ -685,18 +726,30 @@ class Retrieved : public Packet {
 public:
     std::unordered_map<std::string, json> keys;
     Retrieved() : Packet(kPacketRetrieved) {}
+    virtual void convert_to_json(json& j) const override;
 };
 
-/// \brief Sent to clients in response to a Set package if want_reply was set to true, or if the client has registered to receive updates for a certain key using the SetNotify package.SetReply packages are sent even if a Set package did not alter the value for the key.
-class SetReply {
-    /// @brief The key that was updated.
+/*! \brief Sent to clients in response to a Set package if `want_reply` was set
+ * to true, or if the client has registered to receive updates for a certain
+ * key using SetNotify.
+ *
+ * SetReply packets are sent even if a Set package did not alter the value for the key.
+ */
+class SetReply: public Packet {
+public:
+    /// \brief The key that was updated.
     std::string key;
-    /// @brief The new value for the key.
+    /// \brief The new value for the key.
     json value;
-    /// @brief The value the key had before it was updated. Not present on "_read" prefixed special keys.
-    std::optional<json> original_value;
-    /// @brief The slot that originally sent the Set package causing this change.
-    team_slot_id_t slot;
+    /*! \brief The value the key had before it was updated.
+     *
+     * Not present (set to `std::nullopt`) on `"_read"` prefixed special keys.
+     */
+    std::optional<json> original_value{ std::nullopt };
+    /// \brief The slot that originally sent the Set package causing this change.
+    team_slot_id_t slot{ 0 };
+    SetReply() : Packet(kPacketSetReply), value{ nullptr } {}
+    virtual void convert_to_json(json& j) const override;
 };
 
 //
@@ -759,12 +812,17 @@ public:
     Connect(const std::string& game) : Packet(kPacketConnect), password(), game(game), name(), uuid(), items_handling(ItemsHandling::otherWorlds), tags(), slot_data(false) {}
 };
 
-/// \brief Update arguments from the Connect package, currently only updating tags and items_handling is supported.
-class ConnectUpdate {
+/*! \brief Update arguments from the Connect package, currently only updating
+ * tags and items_handling is supported by Archipelago.
+ */
+class ConnectUpdate : public Packet {
+public:
     /// \brief Flags configuring which items should be sent by the server.
     ItemsHandling items_handling;
     /// \brief Denotes special features or capabilities that the sender is capable of.
     std::vector<std::string> tags;
+    ConnectUpdate() : Packet(kPacketConnectUpdate) {}
+    virtual void convert_to_json(json& json) const override;
 };
 
 class LocationChecks : public Packet {
@@ -797,9 +855,12 @@ class LocationScouts : public Packet {
 public:
     /// \brief The ids of the locations seen by the client.
     std::vector<location_id_t> locations;
-    /// \brief If non-zero, the scouted locations get created and broadcasted as a player - visible hint.
+    /*! \brief If non-zero, the scouted locations get created and broadcasted as
+     * a player-visible hint.
+     */
     int create_as_hint;
     LocationScouts() : Packet(kPacketLocationScouts) {}
+    virtual void convert_to_json(json& json) const override;
 };
 
 /*! \brief Sent to the server to create hints for a specified list of locations.
@@ -813,20 +874,29 @@ public:
 class CreateHints : public Packet {
 public:
     std::vector<location_id_t> locations;
-    player_id_t player;
+    player_id_t player{ 0 };
     /// If included, sets the status of the hint to this status.
     /// Defaults to HINT_UNSPECIFIED. Cannot set HINT_FOUND.
-    std::optional<HintStatus> status;
+    std::optional<HintStatus> status{ std::nullopt };
     CreateHints() : Packet(kPacketCreateHints) {}
+    virtual void convert_to_json(json& json) const override;
 };
 
+/*! \brief Sent to the server to update the status of a Hint.
+ *
+ * The client must be the receiving `player` of the Hint, or the update fails.
+ */
 class UpdateHint : public Packet {
 public:
+    /// \brief the ID of the player being updated
     player_id_t player;
+    /// \brief the location ID of the hint being updated
     location_id_t location;
+    /// \brief the new hint status
     std::optional<HintStatus> status;
 
     UpdateHint() : Packet(kPacketUpdateHint) {}
+    virtual void convert_to_json(json& json) const override;
 };
 
 /*! \brief Sent to the server to update on the sender's status.
@@ -848,7 +918,7 @@ public:
 class Sync : public Packet {
 public:
     Sync() : Packet(kPacketSync) {}
-    void convert_to_json(json& j) const override { j = json::object(); }
+    void convert_to_json(json& j) const override;
 };
 
 /*! \brief Send text to other players.
@@ -872,7 +942,10 @@ class GetDataPackage : public Packet {
 public:
     GetDataPackage() : Packet(kPacketGetDataPackage), games() {}
     GetDataPackage(const std::vector<std::string>& pGames) : Packet(kPacketGetDataPackage), games(pGames) {}
-    /// @brief If specified, will only send back the specified data.
+    /*! \brief A list of games to retrieve.
+     *
+     * If given, the server will only return games belonging to this set.
+     */
     std::optional<std::vector<std::string>> games;
     virtual void convert_to_json(json& json) const override;
 };
@@ -880,7 +953,8 @@ public:
 /*! \brief Send a message to the server that will be relayed (bounced) to other
  * clients.
  */
-class Bounce {
+class Bounce: public Packet {
+public:
     /// \brief Game names that should receive this message
     std::optional<std::vector<std::string>> games;
     /// \brief Player IDs that should receive this message
@@ -889,6 +963,8 @@ class Bounce {
     std::optional<std::vector<std::string>> tags;
     /// \brief Any data you want to send
     std::optional<json> data;
+    Bounce() : Packet(kPacketBounce) {}
+    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief A Bounce packet that indicates that a player has died.
@@ -929,11 +1005,12 @@ public:
     json extra{};
     Get() : Packet(kPacketGet), keys() {}
     Get(const std::string& key) : Packet(kPacketGet), keys({ key }) {}
+    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief operation to perform on a value when setting it via a Set packet.
  */
-enum DataStorageOperationType {
+enum class DataStorageOperationType {
     /// \brief Sets the current value of the key to value.
     opReplace,
     /// \brief If the key has no value yet, sets the current value of the key to default of the Set's package (value is ignored).
@@ -975,6 +1052,7 @@ enum DataStorageOperationType {
 /*! \brief describes how to set data
  */
 class DataStorageOperation {
+public:
     /// \brief the operation to perform
     DataStorageOperationType operation;
     /// \brief the new JSON value
@@ -990,21 +1068,32 @@ class DataStorageOperation {
  * set.
  */
 class Set : public Packet {
+public:
     /// \brief The key to manipulate. Can never start with `_read`.
     std::string key;
-    /// \brief The default value to use in case the key has no value on the server.
-    json defaultValue;
+    /*! \brief The default value to use in case the key has no value on the
+     * server.
+     *
+     * The actual field in the JSON object is `"default"` but as `default` is
+     * a keyword, the field name needed to be something else.
+     */
+    json default_value;
     /// \brief If true, the server will send a SetReply response back to the client.
     bool want_reply;
     /// \brief Operations to apply to the value, multiple operations can be present and they will be executed in order of appearance.
     std::vector<DataStorageOperation> operations;
+    Set(std::string& key) : Packet(kPacketSet), key(key) {}
+    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief Requests that the server notify a client whenever a value changes.
  */
 class SetNotify : public Packet {
+public:
     /// \brief Keys to receive all SetReply packages for.
     std::vector<std::string> keys;
+    SetNotify() : Packet(kPacketSetNotify) {}
+    virtual void convert_to_json(json& j) const override;
 };
 
 //
@@ -1015,32 +1104,78 @@ class SetNotify : public Packet {
 //
 // There's no good reason to list these in Doxygen so ... don't.
 /// \cond
+void from_json(const json& j, Bounce& bounce);
+void to_json(json& j, const Bounce& bounce);
+void from_json(const json& j, Bounced& bounced);
+void to_json(json& j, const Bounced& bounced);
+void from_json(const json& j, Connect& connect);
+void to_json(json& j, const Connect& connect);
 void from_json(const json& j, Connected& connected);
+void to_json(json& j, const Connected& connected);
 void from_json(const json& j, ConnectionRefused& connectionRefused);
-void from_json(const json& j, DataPackage& connectionRefused);
-void to_json(json& j, const DataPackage& connectionRefused);
+void to_json(json& j, const ConnectionRefused& connectionRefused);
+void from_json(const json& j, ConnectUpdate& connectUpdate);
+void to_json(json& j, const ConnectUpdate& connectUpdate);
+void from_json(const json& j, CreateHints& createHints);
+void to_json(json& j, const CreateHints& createHints);
+void from_json(const json& j, DataPackage& dataPackage);
+void to_json(json& j, const DataPackage& dataPackage);
+void from_json(const json& j, DataStorageOperation& dataStorageOperation);
+void to_json(json& j, const DataStorageOperation& dataStorageOperation);
+void from_json(const json& j, DataStorageOperationType& dataStorageOperationType);
+void to_json(json& j, const DataStorageOperationType& dataStorageOperationType);
+void from_json(const json& j, Get& get);
+void to_json(json& j, const Get& get);
+void from_json(const json& j, GetDataPackage& getDataPackage);
+void to_json(json& j, const GetDataPackage& getDataPackage);
 void from_json(const json& j, InvalidPacket& invalidPacket);
+void to_json(json& j, const InvalidPacket& invalidPacket);
 void from_json(const json& j, JSONMessagePart& jsonMessagePart);
-void to_json(json& j, const JSONMessagePart& jsonMessagePart);
+void to_json(json& j, const JSONMessagePart& jSONMessagePart);
 void from_json(const json& j, LocationChecks& locationChecks);
-void from_json(const json& j, NetworkItem& item);
-void to_json(json& j, const NetworkItem& item);
-void from_json(const json& j, NetworkPlayer& player);
-void to_json(json& j, const NetworkPlayer& player);
-void from_json(const json& j, NetworkSlot& slot);
-void to_json(json& j, const NetworkSlot& slot);
-void from_json(const json& j, NetworkVersion& version);
-void to_json(json& j, const NetworkVersion& version);
+void to_json(json& j, const LocationChecks& locationChecks);
+void from_json(const json& j, LocationInfo& locationInfo);
+void to_json(json& j, const LocationInfo& locationInfo);
+void from_json(const json& j, LocationScouts& locationScouts);
+void to_json(json& j, const LocationScouts& locationScouts);
+void from_json(const json& j, NetworkItem& networkItem);
+void to_json(json& j, const NetworkItem& networkItem);
+void from_json(const json& j, NetworkPlayer& networkPlayer);
+void to_json(json& j, const NetworkPlayer& networkPlayer);
+void from_json(const json& j, NetworkSlot& networkSlot);
+void to_json(json& j, const NetworkSlot& networkSlot);
+void from_json(const json& j, NetworkVersion& networkVersion);
+void to_json(json& j, const NetworkVersion& networkVersion);
 void from_json(const json& j, PrintJSON& printJSON);
 void to_json(json& j, const PrintJSON& printJSON);
 void from_json(const json& j, PrintJsonType& printJsonType);
 void to_json(json& j, const PrintJsonType& printJsonType);
 void from_json(const json& j, ReceivedItems& receivedItems);
+void to_json(json& j, const ReceivedItems& receivedItems);
+void from_json(const json& j, Retrieved& retrieved);
+void to_json(json& j, const Retrieved& retrieved);
 void from_json(const json& j, RoomInfo& roomInfo);
 void to_json(json& j, const RoomInfo& roomInfo);
-void from_json(const json& j, Say& receivedItems);
+void from_json(const json& j, RoomUpdate& roomUpdate);
+void to_json(json& j, const RoomUpdate& roomUpdate);
+void from_json(const json& j, Say& say);
+void to_json(json& j, const Say& say);
+void from_json(const json& j, Set& set);
+void to_json(json& j, const Set& set);
+void from_json(const json& j, SetNotify& setNotify);
+void to_json(json& j, const SetNotify& setNotify);
+void from_json(const json& j, SetReply& setReply);
+void to_json(json& j, const SetReply& setReply);
 void from_json(const json& j, SlotInfo& slotInfo);
 void to_json(json& j, const SlotInfo& slotInfo);
+void from_json(const json& j, StatusUpdate& statusUpdate);
+void to_json(json& j, const StatusUpdate& statusUpdate);
+void from_json(const json& j, Sync& sync);
+void to_json(json& j, const Sync& sync);
+void from_json(const json& j, SlotInfo& slotInfo);
+void to_json(json& j, const SlotInfo& slotInfo);
+void from_json(const json& j, UpdateHint& updateHint);
+void to_json(json& j, const UpdateHint& updateHint);
 /// \endcond
 
 
