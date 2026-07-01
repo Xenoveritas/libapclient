@@ -20,6 +20,11 @@ project ("libapclient"
     LANGUAGES CXX
 )
 
+option(LIBAPCLIENT_SHARED "Compile libapclient as a shared library." OFF)
+option(LIBAPCLIENT_BUILD_EXAMPLE "Build the example client program." OFF)
+# TLS will be required before this is usable. This is currently set to off to avoid having to configure that.
+option(LIBAPCLIENT_USE_TLS "Whether to enable TLS." OFF)
+
 # Add dependencies. Because this is intended to be used as a library with projects that
 # very well may use the same libraries (especially zlib), check if the targets already
 # exist and then just skip the CPMAddPackage if they do under the assumption that
@@ -40,23 +45,24 @@ if (NOT TARGET zlibstatic)
         GITHUB_REPOSITORY madler/zlib
         GIT_TAG v1.3.2
         VERSION 1.3.1
-        OPTIONS "ZLIB_BUILD_EXAMPLES OFF" "ZLIB_BUILD_SHARED OFF" "ZLIB_BUILD_STATIC ON"
+        OPTIONS
+            "ZLIB_BUILD_EXAMPLES OFF" "ZLIB_BUILD_SHARED OFF" "ZLIB_BUILD_STATIC ON"
     )
-    if(ZLIB_ADDED)
-        add_library(ZLIB::ZLIB ALIAS zlibstatic)
-        # Try to force find_package to find this version of the library
-        SET(ZLIB_DIR "${ZLIB_BINARY_DIR}" CACHE PATH "" FORCE)
-        SET(ZLIB_LIBRARY "${ZLIB_BINARY_DIR}" CACHE PATH "" FORCE)
-        SET(ZLIB_INCLUDE_DIR "${ZLIB_BINARY_DIR}" CACHE PATH "" FORCE)
-    endif()
+    add_library(ZLIB::ZLIB ALIAS zlibstatic)
 endif()
+# Try to force find_package to find the CPM-provided version of ZLib
+SET(ZLIB_DIR "${ZLIB_BINARY_DIR}" CACHE PATH "" FORCE)
+SET(ZLIB_LIBRARY "${ZLIB_BINARY_DIR}" CACHE PATH "" FORCE)
+SET(ZLIB_INCLUDE_DIR "${ZLIB_BINARY_DIR}" CACHE PATH "" FORCE)
 if (NOT TARGET ixwebsocket)
     CPMAddPackage(
         NAME ixwebsocket
         GITHUB_REPOSITORY machinezone/IXWebSocket
         GIT_TAG v12.0.0
         VERSION 12.0.0
-        OPTIONS "USE_TLS OFF" ${IX_ZLIB_OPTS}
+        OPTIONS
+            "USE_TLS ${LIBAPCLIENT_USE_TLS}"
+            "IXWEBSOCKET_INSTALL OFF"
     )
 endif()
 
@@ -64,8 +70,6 @@ endif()
 if (NOT TARGET stduuid)
     CPMAddPackage("gh:mariusbancila/stduuid@1.2.3")
 endif()
-
-option(LIBAPCLIENT_SHARED "Compile libapclient as a shared library." OFF)
 
 set(LIBAPCLIENT_SOURCES
     "src/libapclient.cpp"
@@ -112,4 +116,6 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET libapclient PROPERTY CXX_STANDARD 20)
 endif()
 
-add_subdirectory(example)
+if (${LIBAPCLIENT_BUILD_EXAMPLE})
+    add_subdirectory(example)
+endif()
