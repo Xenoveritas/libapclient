@@ -280,6 +280,21 @@ protected:
      */
     std::mutex m_mutex{};
 
+    /*! \brief Send a packet to the server WITHOUT locking the mutex.
+     *
+     * This does NOT check if the client is connected. It's used internally when
+     * the mutex is already locked and the state is already known.
+     *
+     * (sendMessage(const json&) has to lock the mutex to ensure that the
+     * socket exists.)
+     *
+     * Classes that extend this class may use this method as long as they
+     * themselves lock the mutex before calling it.
+     *
+     * \param packet the packet to send to the server
+     */
+    void sendUnlockedPacket(const packets::Packet& packet);
+
 private:
     /*! \brief Current client state.
      *
@@ -410,6 +425,10 @@ public:
     //void sendLocationScouts(packets::LocationScouts& locationScouts);
     //void sendCreateHints(packets::CreateHints& createHints);
 
+    /*! \brief Send an update for the connected client's status.
+     *
+     * \param clientStatus the new client status
+     */
     void sendStatusUpdate(packets::ClientStatus clientStatus);
 
     /*! \brief Send a packets::Say packet, which is effectively text the player
@@ -477,14 +496,24 @@ public:
      *
      * This uses packets::Packet::to_json(json&) to create a JSON object that
      * can then be sent to sendMessage(const json&).
+     * 
+     * This method will ultimately lock the mutex in order to ensure that the
+     * socket exists.
      *
      * \param packet the packet to send
+     * \throws InvalidStateError if the client is not connected to a server
      */
     void sendPacket(const packets::Packet& packet);
 
     /*! \brief Send a JSON message to the server.
      *
      * This converts the JSON to text via json::dumps().
+     * 
+     * This method has to lock the mutex in order to ensure that the socket
+     * exists when it's sending data. Because the socket can in theory be
+     * destroyed via disconnect() at any time, sending a message requires
+     * locking the mutex.
+     * 
      * \param payload the payload to send to the server
      * \throws InvalidStateError if the client is not connected to a server
      */

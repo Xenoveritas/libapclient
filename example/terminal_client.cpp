@@ -1,11 +1,12 @@
 #include "libapclient/libapclient.h"
+#include "libapclient/simple_client.h"
+#include "libapclient/tokenizer.h"
 
 #include <iostream>
 #include <stdexcept>
 
 #include <ixwebsocket/IXNetSystem.h>
 
-#include "tokenizer.h"
 
 /*
 * Default client commands:
@@ -38,13 +39,50 @@
     Send ready status to server.
 */
 
-class TerminalClient : public archipelago::TrackerClient {
+void showUUID(archipelago::SimpleClient& client, const std::vector<std::string>& args) {
+    bool create = args.size() >= 2 && args[1] == "create";
+    try {
+        auto uuid = archipelago::getCachedPlayerUUID();
+        if (uuid.has_value()) {
+            client.write("Your client UUID is { ");
+            client.write(*uuid);
+            client.writeLn(" }.");
+        } else {
+            if (create) {
+                client.writeLn("No cached client UUID exists.");
+                client.write("Created a new UUID { ");
+                client.write(archipelago::getPlayerUUID(true));
+                client.writeLn(" }.");
+            }
+            else {
+                client.writeLn("Could not look up your client UUID. (You may not have an Archipelago-generated client ID cached yet.)", archipelago::MessageType::error);
+            }
+        }
+    } catch (const std::runtime_error& e) {
+        client.write("Unable to look up your UUID: ", archipelago::MessageType::error);
+        client.writeLn(e.what(), archipelago::MessageType::error);
+    }
+}
+
+void showCacheDir(archipelago::SimpleClient& client, const std::vector<std::string>& args) {
+    try {
+        auto path = archipelago::getPlayerArchipelagoCacheDirectory();
+        client.write("Archipelago cache directory: ");
+        client.writeLn(path.string());
+    } catch (const std::runtime_error& e) {
+        client.write("Unable to look up the cache directory: ", archipelago::MessageType::error);
+        client.writeLn(e.what(), archipelago::MessageType::error);
+    }
+}
+
+// Most of this is now moved into the library and this is being slowly dismantled
+class OldTerminalClient : public archipelago::TrackerClient {
 private:
     std::istream& m_in;
     std::ostream& m_out;
     std::optional<std::string> m_gameName;
 public:
-    TerminalClient(std::istream& in = std::cin, std::ostream& out = std::cout) : archipelago::TrackerClient(), m_in(in), m_out(out) {}
+    OldTerminalClient(std::istream& in = std::cin, std::ostream& out = std::cout) : archipelago::TrackerClient(), m_in(in), m_out(out) {}
 
     // Request item info
     void createConnect(archipelago::packets::Connect& connect) override {
@@ -77,7 +115,7 @@ public:
         // parse the string - ish. Command must start with a '/'
         if (str.front() == '/') {
             std::vector<std::string> tokens;
-            tokenize(str, tokens);
+            archipelago::tokenize(str, tokens);
             if (!tokens.empty()) {
                 std::string& command = tokens.front();
                 if (command == "/connect") {
@@ -320,7 +358,11 @@ int main(int argc, char* argv[])
     // Required under Windows
     ix::initNetSystem();
 
-    auto app = TerminalClient();
+    std::cout << "Welcome to AP Client!" << std::endl;
+    std::cout << "Use \"/connect <server> <player> [password]\" to connect or \"help\" to display additional commands." << std::endl;
+    auto app = archipelago::TerminalClient(std::cin, std::cout);
+    app.addCommand("uuid", showUUID, "display your client UUID", "[create]", "Display the cached Archipelago UUID if it exists.\nIf it does not exist and \"create\" is given, a new UUID will be generated.");
+    app.addCommand("cachedir", showCacheDir);
     app.run();
 
     return 0;

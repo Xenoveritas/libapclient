@@ -207,7 +207,7 @@ bool Client::sendConnect() {
             return false;
         }
     }
-    sendPacket(connect);
+    sendUnlockedPacket(connect);
     m_state = ClientState::sentConnect;
     return true;
 }
@@ -258,19 +258,25 @@ void Client::sendGetDataPackage(const std::vector<std::string>& games) {
 
 void Client::sendPacket(const packets::Packet& packet) {
     // Basically, convert to JSON and then send.
-    // Despite this being a public API, it should never grab the mutex: it doesn't need to (IXWebSocket
-    // has its own mutex to ensure messages are queued properly) and some internal APIs may call
-    // this while holding the mutex.
     json j;
     packet.to_json(j);
     // Send the message within a list
     sendMessage(json::array({ j }));
 }
 
+void Client::sendUnlockedPacket(const packets::Packet& packet) {
+    json j;
+    packet.to_json(j);
+    j = json::array({ j });
+    const std::string text = j.dump();
+    std::cout << "Sending: " << text << std::endl;
+    m_socket->sendUtf8Text(text);
+}
+
 void Client::sendMessage(const json& payload) {
     std::lock_guard lock(m_mutex);
     if (m_socket == nullptr) {
-        throw new InvalidStateError("Can't send message when disconnected");
+        throw InvalidStateError("Can't send message when disconnected");
     }
     const std::string text = payload.dump();
     std::cout << "Sending: " << text << std::endl;

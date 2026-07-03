@@ -8,6 +8,7 @@
 #include <optional>
 #include <iostream>
 #include <functional>
+#include <memory>
 
 namespace archipelago {
 
@@ -28,12 +29,14 @@ public:
     std::string name;
     std::vector<std::string> aliases;
     std::string basicHelp;
+    std::string arguments;
     std::string detailedHelp;
     CommandHelpData(
         const std::string& aName,
         const std::string& aBasicHelp,
+        const std::string& aArguments,
         const std::string& aDetailedHelp
-    ) : name(aName), aliases(), basicHelp(aBasicHelp), detailedHelp(aDetailedHelp) {}
+    ) : name(aName), aliases(), basicHelp(aBasicHelp), arguments(aArguments), detailedHelp(aDetailedHelp) {}
 
     void addAlias(const std::string& name) { aliases.push_back(name); }
 };
@@ -41,7 +44,8 @@ public:
 enum class MessageType {
     basic,
     help,
-    error
+    error,
+    server
 };
 
 /*! \brief built-in commands */
@@ -52,6 +56,7 @@ namespace commands {
 void connect(SimpleClient& client, const std::vector<std::string>& arguments);
 void disconnect(SimpleClient& client, const std::vector<std::string>& arguments);
 void help(SimpleClient& client, const std::vector<std::string>& arguments);
+void ready(SimpleClient& client, const std::vector<std::string>& arguments);
 
 }
 
@@ -64,9 +69,9 @@ private:
     /// \brief A map of command names to the commands they run.
     std::unordered_map<std::string, CommandFunction> m_commands;
     /// \brief An ordered list of help data.
-    std::vector<CommandHelpData> m_helpList;
+    std::vector<std::shared_ptr<CommandHelpData>> m_helpList;
     /// \brief A map of names to corresponding help metadata.
-    std::unordered_map<std::string, CommandHelpData*> m_helpData;
+    std::unordered_map<std::string, std::shared_ptr<CommandHelpData>> m_helpData;
 public:
     SimpleClient(bool bindDefaults = true) : TrackerClient() {
         if (bindDefaults) {
@@ -88,13 +93,24 @@ public:
      * An empty string is treated as "no help" and will prevent the command from
      * being shown in help lists. If the basic help string is empty, then the
      * detailed help string is ignored.
+     * 
+     * The arguments value is a string shown after the command name. This is
+     * used with, for example, writeUsageHelp(const std::string&).
      *
      * \param name the name of the command (without the starting "/")
      * \param command the command to run
-     * \param help the help string to use
-     * \param detailedHelp the detailed help string to use
+     * \param help the help string, provided via just /help
+     * \param arguments if given, help text describing arguments accepted
+     * \param detailedHelp detailed help to display via /help
+     * \throws std::runtime_error if there is already a command bound to `name`
      */
-    void addCommand(const std::string& name, const CommandFunction& command, const std::string& help = std::string(), const std::string& detailedHelp = std::string());
+    void addCommand(
+        const std::string& name,
+        const CommandFunction& command,
+        const std::string& help = std::string(),
+        const std::string& arguments = std::string(),
+        const std::string& detailedHelp = std::string()
+    );
 
     /*! \brief Add an alias for an existing command.
      *
@@ -125,7 +141,31 @@ public:
      *
      * \param message the message to write
      */
-    virtual void writeLn(const std::string& message, MessageType type = MessageType::basic) = 0;
+    virtual void writeLn(const std::string& message = std::string(), MessageType type = MessageType::basic) = 0;
+
+    /*! \brief override to forward a message from the client to
+     * write(const std::string& message, MessageType type = MessageType::basic)
+     */
+    virtual void onPrintJSON(const archipelago::packets::PrintJSON& json) override {
+        // This is the function that it's important to override: the ability to actually print text to the screen
+        for (auto it = json.data.cbegin(); it != json.data.cend(); ++it) {
+            auto& data = *it;
+            if (data.text.has_value()) {
+                // For now, write it raw
+                write(*(data.text));
+            }
+        }
+        writeLn();
+    }
+
+    /*! \brief Write out usage help for the given command.
+     *
+     * This is frequently used when the command is called incorrectly.
+     *
+     * \param name the name of the command to write help text for
+     * \param error if given, an error message to show after the usage text
+     */
+    virtual void writeUsageHelp(const std::string& name, const std::string& error = std::string());
 
     /*! \brief Write out detailed help for the given command.
      */

@@ -3,7 +3,13 @@
 
 namespace archipelago {
 
-void SimpleClient::addCommand(const std::string& name, const CommandFunction& command, const std::string& help, const std::string& detailedHelp) {
+void SimpleClient::addCommand(
+    const std::string& name,
+    const CommandFunction& command,
+    const std::string& help,
+    const std::string& arguments,
+    const std::string& detailedHelp
+) {
     // First part is simple:
     const bool success = m_commands.insert({name, command}).second;
     if (!success) {
@@ -11,10 +17,10 @@ void SimpleClient::addCommand(const std::string& name, const CommandFunction& co
     }
     if (!help.empty()) {
         // Add help
-        m_helpList.push_back(std::move(CommandHelpData(name, help, detailedHelp)));
-        auto& insertedHelp = m_helpList.back();
+        std::shared_ptr<CommandHelpData> helpData = std::make_shared<CommandHelpData>(CommandHelpData(name, help, arguments, detailedHelp));
+        m_helpList.push_back(helpData);
         // Add the reference to this help to the m_helpData map
-        m_helpData.insert({name, &insertedHelp});
+        m_helpData.insert({name, helpData});
     }
 }
 
@@ -36,9 +42,10 @@ void SimpleClient::addAlias(const std::string& name, const std::string& original
 }
 
 void SimpleClient::addDefaultCommands() {
-    addCommand("help", commands::help, "show help", "provide help about how to use a command or detailed help about a specific command");
-    addCommand("connect", commands::connect, "connect to the server");
+    addCommand("help", commands::help, "show general help or help for the specified command", "[command]", "provide help about how to use a command or detailed help about a specific command");
+    addCommand("connect", commands::connect, "connect to the server", "<server> <name> [password]", "connect to the server via the given WebSocket URL, player name, and password");
     addCommand("disconnect", commands::disconnect, "disconnect from the server");
+    addCommand("ready", commands::ready, "mark self as ready on the server");
 }
 
 const CommandFunction* SimpleClient::lookupCommand(const std::string& name) const {
@@ -85,6 +92,7 @@ void SimpleClient::writeDetailedHelp(const std::string& name) {
         }
     } else {
         writeLn(std::format("/{}", name), MessageType::help);
+        writeLn();
         if (iter->second->detailedHelp.empty()) {
             writeLn(iter->second->basicHelp, MessageType::help);
         } else {
@@ -95,9 +103,34 @@ void SimpleClient::writeDetailedHelp(const std::string& name) {
 
 void SimpleClient::writeHelp() {
     writeLn("The following commands are available:", MessageType::help);
-    for (auto& helpData : m_helpList) {
-        writeLn(std::format("/{}", helpData.name), MessageType::help);
-        writeLn(std::format("    {}", helpData.basicHelp), MessageType::help);
+    for (auto helpData : m_helpList) {
+        write(std::format("/{}", helpData->name, helpData->arguments), MessageType::help);
+        if (!helpData->arguments.empty()) {
+            write(" ", MessageType::help);
+            write(helpData->arguments);
+        }
+        writeLn();
+        writeLn(std::format("    {}", helpData->basicHelp), MessageType::help);
+    }
+}
+
+void SimpleClient::writeUsageHelp(const std::string& name, const std::string& error) {
+    const std::string& sanitizedName = name.size() > 1 && name[0] == '/' ? name.substr(1) : name;
+    auto iter = m_helpData.find(sanitizedName);
+    if (iter == m_helpData.end()) {
+        // No help data. Assume the command exists and write out basic usage data.
+        writeLn(std::format("Usage: /{}", sanitizedName), MessageType::help);
+    } else {
+        auto helpData = iter->second;
+        write(std::format("Usage: /{}", sanitizedName), MessageType::help);
+        if (!helpData->arguments.empty()) {
+            write(" ", MessageType::help);
+            write(helpData->arguments, MessageType::help);
+        }
+        writeLn();
+    }
+    if (!error.empty()) {
+        writeLn(error, MessageType::error);
     }
 }
 
@@ -105,9 +138,8 @@ namespace commands {
 
 void connect(SimpleClient& client, const std::vector<std::string>& arguments) {
     if (arguments.size() < 3 || arguments.size() > 4) {
-        client.write("Usage: ", MessageType::error);
-        client.write(arguments[0], MessageType::error);
-        client.writeLn(" <server> <player>", MessageType::error);
+        client.writeUsageHelp(arguments[0]);
+        return;
     }
     auto url = arguments[1];
     auto player = arguments[2];
@@ -121,13 +153,13 @@ void connect(SimpleClient& client, const std::vector<std::string>& arguments) {
 
 void disconnect(SimpleClient& client, const std::vector<std::string>& arguments) {
     if (arguments.size() > 1) {
-        client.write("Usage: ", MessageType::error);
-        client.writeLn(arguments[0], MessageType::error);
+        client.writeUsageHelp(arguments[0]);
+        return;
     }
     try {
         client.disconnect();
     } catch (const InvalidStateError&) {
-        client.write("Cannot disconnect: already disconnected.", MessageType::error);
+        client.writeLn("Cannot disconnect: already disconnected.", MessageType::error);
     }
 }
 
@@ -140,6 +172,16 @@ void help(SimpleClient& client, const std::vector<std::string>& arguments) {
         client.writeDetailedHelp(arguments[1]);
     } else {
         client.writeHelp();
+    }
+}
+
+void ready(SimpleClient& client, const std::vector<std::string>& arguments) {
+    if (arguments.size() > 1) {
+        client.writeLn(std::format("Usage: /{}", arguments[0]));
+    } else {
+        // The actual Archipelago has this "toggle", sort of
+        // The current state can be accessed by Getting _read_client_status_[team]_[slot]
+        client.sendStatusUpdate(archipelago::packets::ClientStatus::ready);
     }
 }
 

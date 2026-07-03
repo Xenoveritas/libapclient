@@ -199,11 +199,11 @@ enum class ClientStatus {
      */
     connected = 5,
     /// \brief the client has indicated they are ready to start
-    clientReady = 10,
+    ready = 10,
     /// \brief the client is playing the game
-    clientPlaying = 20,
+    playing = 20,
     /// \brief the client has achieved their goal
-    clientGoal = 30
+    goal = 30
 };
 
 /*! \brief The possible command permission, for commands that may be restricted.
