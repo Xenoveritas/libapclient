@@ -22,25 +22,6 @@ class SimpleClient;
  */
 typedef std::function<void(SimpleClient&, const std::vector<std::string>&)> CommandFunction;
 
-/*! \brief Metadata containing help for a command.
- */
-class CommandHelpData {
-public:
-    std::string name;
-    std::vector<std::string> aliases;
-    std::string basicHelp;
-    std::string arguments;
-    std::string detailedHelp;
-    CommandHelpData(
-        const std::string& aName,
-        const std::string& aBasicHelp,
-        const std::string& aArguments,
-        const std::string& aDetailedHelp
-    ) : name(aName), aliases(), basicHelp(aBasicHelp), arguments(aArguments), detailedHelp(aDetailedHelp) {}
-
-    void addAlias(const std::string& name) { aliases.push_back(name); }
-};
-
 enum class MessageType {
     basic,
     help,
@@ -60,11 +41,41 @@ void ready(SimpleClient& client, const std::vector<std::string>& arguments);
 
 }
 
+struct CommandOptions {
+    /*! \brief whether to replace any existing command by that name or if an
+     * exception should be thrown.
+     */
+    bool replaceExisting = false;
+    /*! \brief help string, provided via just /help */
+    std::string help = "";
+    /*! \brief if given, help text describing arguments accepted */
+    std::string arguments = "";
+    /*! \brief detailed help to display via /help */
+    std::string detailedHelp = "";
+};
+
+/*! \brief Metadata containing help for a command.
+ */
+class CommandHelpData {
+public:
+    std::string name;
+    std::vector<std::string> aliases;
+    std::string basicHelp;
+    std::string arguments;
+    std::string detailedHelp;
+    CommandHelpData(
+        const std::string& aName,
+        const CommandOptions& options
+    ) : name(aName), aliases(), basicHelp(options.help), arguments(options.arguments), detailedHelp(options.detailedHelp) {}
+
+    void addAlias(const std::string& name) { aliases.push_back(name); }
+};
+
 /*! \brief Base class for a simple client that accepts user input.
  *
  * This does not handle any actual UI.
  */
-class SimpleClient : public TrackerClient {
+class SimpleClient : public Client {
 private:
     /// \brief A map of command names to the commands they run.
     std::unordered_map<std::string, CommandFunction> m_commands;
@@ -73,19 +84,52 @@ private:
     /// \brief A map of names to corresponding help metadata.
     std::unordered_map<std::string, std::shared_ptr<CommandHelpData>> m_helpData;
 public:
-    SimpleClient(bool bindDefaults = true) : TrackerClient() {
+    SimpleClient(bool bindDefaults = true) : Client() {
         if (bindDefaults) {
             addDefaultCommands();
         }
     }
 
+    /*! \brief Adds the default commands to the client.
+     *
+     * The following commands are added:
+     * 
+     * | Name       | Implementation                                                                        |
+     * |------------|---------------------------------------------------------------------------------------|
+     * | help       | commands::help(SimpleClient& client, const std::vector<std::string>& arguments)       |
+     * | connect    | commands::connect(SimpleClient& client, const std::vector<std::string>& arguments)    |
+     * | disconnect | commands::disconnect(SimpleClient& client, const std::vector<std::string>& arguments) |
+     * | ready      | commands::ready(SimpleClient& client, const std::vector<std::string>& arguments)      |
+     */
     void addDefaultCommands();
 
-    // Request item info
-    void createConnect(packets::Connect& connect) override {
-        // For this, just grab everything
-        connect.items_handling = packets::ItemsHandling::all;
-        connect.tags.push_back(tag::kTextOnly);
+    /*! \brief Add a client command with the associated options.
+     *
+     * See CommandOptions for what the options do.
+     *
+     * \param name the name of the command (without the starting "/")
+     * \param command the command to run
+     * \param options the options to use for the command
+     * \throws std::runtime_error if there is already a command bound to `name`
+     */
+    void addCommand(
+        const std::string& name,
+        const CommandFunction& command,
+        const CommandOptions& options
+    );
+
+    /*! \brief Add a client command with default options.
+     *
+     * \param name the name of the command (without the starting "/")
+     * \param command the command to run
+     * \throws std::runtime_error if there is already a command bound to `name`
+     */
+    void addCommand(
+        const std::string& name,
+        const CommandFunction& command
+    ) {
+        CommandOptions options;
+        addCommand(name, command, options);
     }
 
     /*! \brief Add a client command with the associated help strings.
@@ -94,23 +138,26 @@ public:
      * being shown in help lists. If the basic help string is empty, then the
      * detailed help string is ignored.
      *
-     * The arguments value is a string shown after the command name. This is
-     * used with, for example, writeUsageHelp(const std::string&).
-     *
      * \param name the name of the command (without the starting "/")
      * \param command the command to run
-     * \param help the help string, provided via just /help
-     * \param arguments if given, help text describing arguments accepted
-     * \param detailedHelp detailed help to display via /help
+     * \param help the help string for the command
      * \throws std::runtime_error if there is already a command bound to `name`
      */
     void addCommand(
         const std::string& name,
         const CommandFunction& command,
-        const std::string& help = std::string(),
-        const std::string& arguments = std::string(),
-        const std::string& detailedHelp = std::string()
-    );
+        const std::string& help
+    ) {
+        addCommand(name, command, { .help = help });
+    }
+
+    /*! \brief Remove a command.
+     *
+     * \param name the command to remove
+     * \return whether or not a command was removed - if the command didn't
+     *         exist, this returns `false`
+     */
+    bool removeCommand(const std::string& name);
 
     /*! \brief Add an alias for an existing command.
      *
@@ -174,6 +221,32 @@ public:
     /*! \brief Write out detailed help for the given command.
      */
     virtual void writeHelp();
+
+    /*! \brief Check if the given string should be considered a command.
+     *
+     * The default implementation considers any string that starts with a '/' to
+     * be a command.
+     */
+    virtual bool isCommand(const std::string& command) const {
+        return command.size() >= 1 && command[0] == '/';
+    }
+    
+    /*! \brief Sanitize a command name, removing whatever command prefix from
+     * the name.
+     *
+     * The default implementation chbcks if the first character is a '/' and
+     * removes it if it is.
+     * 
+     * This is used to santize command names given to any of the command
+     * lookup functions.
+     */
+    virtual std::string_view sanitizeCommand(const std::string& command) {
+        std::string_view view = command;
+        if (command.size() > 0 && command[0] == '/') {
+            view.remove_prefix(1);
+        }
+        return view;
+    }
 
     /*! \brief handle a comment
      *

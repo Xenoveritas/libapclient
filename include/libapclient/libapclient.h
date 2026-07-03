@@ -415,8 +415,8 @@ public:
      * password filled in if they were given to
      * connect(const std::string&, const std::string&, const std::string*).
      *
-     * The default implementation only adds tag::kTextOnly to
-     * packets::Connect::tags.
+     * The default implementation adds tag::kTextOnly to
+     * packets::Connect::tags but does nothing else.
      */
     virtual void createConnect(packets::Connect& connect);
 

@@ -6,22 +6,51 @@ namespace archipelago {
 void SimpleClient::addCommand(
     const std::string& name,
     const CommandFunction& command,
-    const std::string& help,
-    const std::string& arguments,
-    const std::string& detailedHelp
+    const CommandOptions& options
 ) {
     // First part is simple:
     const bool success = m_commands.insert({name, command}).second;
     if (!success) {
-        throw std::runtime_error(std::format("There is already a command bound to {}", name));
+        if (!options.replaceExisting) {
+            throw std::runtime_error(std::format("There is already a command bound to {}", name));
+        }
+        // For now, if the element exists, remove it entirely:
+        removeCommand(name);
+        // And then add it as if it always succeeded
+        if (!m_commands.insert({ name, command }).second) {
+            throw std::runtime_error(std::format("Could not insert command {} even after removing it - possible threading issue?", name));
+        }
     }
-    if (!help.empty()) {
+    if (!options.help.empty()) {
         // Add help
-        std::shared_ptr<CommandHelpData> helpData = std::make_shared<CommandHelpData>(CommandHelpData(name, help, arguments, detailedHelp));
+        std::shared_ptr<CommandHelpData> helpData = std::make_shared<CommandHelpData>(CommandHelpData(name, options));
         m_helpList.push_back(helpData);
         // Add the reference to this help to the m_helpData map
         m_helpData.insert({name, helpData});
     }
+}
+
+bool SimpleClient::removeCommand(const std::string& name) {
+    // First, find the command
+    auto iter = m_commands.find(name);
+    if (iter == m_commands.end()) {
+        return false;
+    }
+    m_commands.erase(iter);
+    // Go through the m_helpList and remove it if it exists there
+    for (auto listIter = m_helpList.begin(); listIter != m_helpList.end(); ++listIter) {
+        if (listIter->get()->name == name) {
+            m_helpList.erase(listIter);
+            // The same name can't be added twice (or shouldn't be able to be) so break here
+            break;
+        }
+    }
+    // Also remove stored help data from the map
+    auto helpIter = m_helpData.find(name);
+    if (helpIter != m_helpData.end()) {
+        m_helpData.erase(helpIter);
+    }
+    return true;
 }
 
 void SimpleClient::addAlias(const std::string& name, const std::string& originalCommand) {
@@ -42,8 +71,16 @@ void SimpleClient::addAlias(const std::string& name, const std::string& original
 }
 
 void SimpleClient::addDefaultCommands() {
-    addCommand("help", commands::help, "show general help or help for the specified command", "[command]", "provide help about how to use a command or detailed help about a specific command");
-    addCommand("connect", commands::connect, "connect to the server", "<server> <name> [password]", "connect to the server via the given WebSocket URL, player name, and password");
+    addCommand("help", commands::help, {
+        .help = "show general help or help for the specified command",
+        .arguments = "[command]",
+        .detailedHelp = "provide help about how to use a command or detailed help about a specific command"
+    });
+    addCommand("connect", commands::connect, {
+        .help = "connect to the server",
+        .arguments = "<server> <name> [password]",
+        .detailedHelp = "connect to the server via the given WebSocket URL, player name, and password"
+    });
     addCommand("disconnect", commands::disconnect, "disconnect from the server");
     addCommand("ready", commands::ready, "mark self as ready on the server");
 }
@@ -181,7 +218,11 @@ void ready(SimpleClient& client, const std::vector<std::string>& arguments) {
     } else {
         // The actual Archipelago has this "toggle", sort of
         // The current state can be accessed by Getting _read_client_status_[team]_[slot]
-        client.sendStatusUpdate(archipelago::packets::ClientStatus::ready);
+        try {
+            client.sendStatusUpdate(archipelago::packets::ClientStatus::ready);
+        } catch (const InvalidStateError&) {
+            client.writeLn("Cannot set ready state when not connected, /connect first.", MessageType::error);
+        }
     }
 }
 
