@@ -1,5 +1,5 @@
 # Demo executable
-add_executable(apclient "terminal_client.cpp" "tokenizer.cpp" "tokenizer.h")
+add_executable(apclient "apclient.cpp")
 target_link_libraries(apclient PRIVATE libapclient)
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)

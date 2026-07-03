@@ -1,6 +1,8 @@
 #include "libapclient/libapclient.h"
+// Currently not part libapclient.h but may become part
 #include "libapclient/simple_client.h"
 #include "libapclient/tokenizer.h"
+#include "libapclient/tracker.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -81,6 +83,7 @@ private:
     std::istream& m_in;
     std::ostream& m_out;
     std::optional<std::string> m_gameName;
+    archipelago::LocationTracker<bool> m_locations;
 public:
     OldTerminalClient(std::istream& in = std::cin, std::ostream& out = std::cout) : archipelago::TrackerClient(), m_in(in), m_out(out) {}
 
@@ -94,6 +97,11 @@ public:
             // Only send the TextOnly tag when connecting as a game client
             connect.tags.push_back(archipelago::tag::kTextOnly);
         }
+    }
+
+    void onConnected(const archipelago::packets::Connected& connected) override {
+        archipelago::TrackerClient::onConnected(connected);
+        m_locations << connected;
     }
 
     void run() {
@@ -133,6 +141,8 @@ public:
                     disconnect();
                 } else if (command == "/say") {
                     commandSay(tokens);
+                } else if (command == "/status") {
+                    commandStatus(tokens);
                 } else if (command == "/game") {
                     commandGame(tokens);
                 } else if (command == "/tracker") {
@@ -272,6 +282,57 @@ public:
         // Just trim off the final space
         message.resize(message.size() - 1);
         sendSay(message);
+    }
+
+    void commandStatus(const std::vector<std::string>& args) {
+        m_out << "Websocket: ";
+        switch (m_socket.getReadyState()) {
+        case ix::ReadyState::Connecting:
+            m_out << "connecting";
+            break;
+        case ix::ReadyState::Open:
+            m_out << "open";
+            break;
+        case ix::ReadyState::Closing:
+            m_out << "closing";
+            break;
+        case ix::ReadyState::Closed:
+            m_out << "closed";
+            break;
+        }
+        m_out << std::endl << "Client state: ";
+        switch (getState()) {
+        case archipelago::ClientState::disconnected:
+            m_out << "disconnected";
+            break;
+        case archipelago::ClientState::connecting:
+            m_out << "connecting (no response from server yet)";
+            break;
+        case archipelago::ClientState::websocketConnected:
+            m_out << "websocket connected (waiting for Archipelago start)";
+            break;
+        case archipelago::ClientState::receivedRoomInfo:
+            m_out << "received room info, response not sent";
+            break;
+        case archipelago::ClientState::sentGetDataPackage:
+            m_out << "requested data package, waiting for data";
+            break;
+        case archipelago::ClientState::receivedDataPackage:
+            m_out << "received data package, response not sent";
+            break;
+        case archipelago::ClientState::sentConnect:
+            m_out << "sent connection request";
+            break;
+        case archipelago::ClientState::connected:
+            m_out << "connected";
+            break;
+        case archipelago::ClientState::connectionRefused:
+            m_out << "websocket connected, active connection refused";
+            break;
+        default:
+            m_out << "internal error";
+        }
+        m_out << std::endl;
     }
 
     void commandGame(const std::vector<std::string>& args) {

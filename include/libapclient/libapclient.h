@@ -13,6 +13,7 @@
 #include <mutex>
 #include <atomic>
 #include <stdexcept>
+#include <future>
 
 #include <ixwebsocket/IXWebSocket.h>
 
@@ -117,6 +118,10 @@ enum class ClientState {
     /*! \brief The client isn't connected at all (the initial state)
      */
     disconnected,
+
+    /*! \brief The client is disconnecting, but the socket hasn't closed yet.
+     */
+    disconnecting,
 
     /*! \brief Indicates that the client has opened the websocket but not
      * received anything from the server yet
@@ -295,22 +300,43 @@ protected:
      */
     void sendUnlockedPacket(const packets::Packet& packet);
 
+    /*! \brief Get the client state **without** locking the mutex.
+     *
+     * This is only intended to be called while the mutex is locked.
+     */
+    ClientState getUnlockedState() { return m_state; }
+
 private:
     /*! \brief Current client state.
-     *
-     * An atomic is used to ensure that writes are kept in order. On some
-     * platforms, this means client state changes may be entirely lock-free.
      */
-    std::atomic<ClientState> m_state{ ClientState::disconnected };
+    ClientState m_state{ ClientState::disconnected };
 
-    /*! \brief Close the socket in another thread.
+    /*! \brief Internal function used to close the socket in another thread.
      *
-     * For... reasons
+     * Basically, ix::WebSocket::stop() will wait on its thread, so if an
+     * attempt is made to disconnect from the socket thread, that will deadlock.
+     * Instead another thread is created to wait on it.
      */
-    void disconnect_socket_run();
+    void disconnect_socket_run(std::promise<void> disconnect_promise);
 
 public:
     Client();
+
+    /*! \brief Deconstructor.
+     *
+     * \warning There is one important caveat with the deconstructor: if the
+     * client is still connected, it will trigger ix::~WebSocket(), which calls
+     * ix::WebSocket::stop(), which (if the socket thread is live)
+     * calls std::thread::join(). If the deconstructor is run from that thread,
+     * this will cause a std::system_error as a thread cannot wait for itself to
+     * finish execution.
+     *
+     * This can safely be called from any thread if the client is disconnected,
+     * solely because disconnecting causes the socket to be disposed of - but
+     * also, once the client is back in the disconnected state, the socket
+     * thread will have terminated, meaning it will no longer be possible to
+     * call from the same thread.
+     */
     ~Client();
 
     /*! \brief Start connecting to the server.
@@ -341,13 +367,23 @@ public:
      */
     void connect(const std::string& serverUrl, const std::string& playerName);
 
-    /// Close the connection.
-    void disconnect();
+    /*! \brief Close the client connection.
+     *
+     * This can safely be called from any thread - because it can't detect
+     * whether or not it's running on the socket thread, this method starts a
+     * new thread that waits for the socket to close and then updates the
+     * internal state.
+     *
+     * \warning Don't wait on the future from the socket thread! Doing that
+     * will deadlock as the callback needs to return to the socket thread
+     * in order for the thread to complete, and the future cannot resolve until
+     * the thread completes.
+     *
+     * \return a future that resolves when the disconnection has completed
+     */
+    std::future<void> disconnect();
 
     /*! \brief Gets the current client state.
-     *
-     * This is thread-safe - the state is stored via a std::atomic. (However,
-     * that means it can't be accessed in a `const` manner.)
      */
     ClientState getState();
 
@@ -496,7 +532,7 @@ public:
      *
      * This uses packets::Packet::to_json(json&) to create a JSON object that
      * can then be sent to sendMessage(const json&).
-     * 
+     *
      * This method will ultimately lock the mutex in order to ensure that the
      * socket exists.
      *
@@ -508,12 +544,12 @@ public:
     /*! \brief Send a JSON message to the server.
      *
      * This converts the JSON to text via json::dumps().
-     * 
+     *
      * This method has to lock the mutex in order to ensure that the socket
      * exists when it's sending data. Because the socket can in theory be
      * destroyed via disconnect() at any time, sending a message requires
      * locking the mutex.
-     * 
+     *
      * \param payload the payload to send to the server
      * \throws InvalidStateError if the client is not connected to a server
      */
@@ -620,7 +656,7 @@ public:
 
     /*! \brief Receive a bounced message from the server.
      *
-     * See packets::Bounce from more details.
+     * See packets::Bounce for more details.
      *
      * The default implementation does nothing.
      */
@@ -701,7 +737,7 @@ public:
      * logError(const std::string&)) but otherwise ignores the message.
      *
      * \param rawMessage the raw message
-     *\param message the parsed JSON, which is not a valid array of packets
+     * \param message the parsed JSON, which is not a valid array of packets
      */
     virtual void receiveInvalidMessage(const std::string& rawMessage, const json& message);
 
@@ -743,10 +779,9 @@ public:
     double get_remote_time_now();
 };
 
-/*! \brief
- * This extends the generic Client with some utilities intended to make writing
- * a tracker client easier. The tracker client maintains a list of items that
- * have been received and locations that have been checked.
+/*! \brief Extends the generic Client with some utilities intended to make
+ * writing a tracker client easier. The tracker client maintains a list of items
+ * that have been received and locations that have been checked.
  */
 class TrackerClient : public Client {
 public:

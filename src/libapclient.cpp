@@ -125,7 +125,7 @@ void Client::connect(const std::string& serverUrl, const std::string& playerName
     connect(serverUrl, playerName, nullptr);
 }
 
-void Client::disconnect_socket_run() {
+void Client::disconnect_socket_run(std::promise<void> disconnect_promise) {
     std::cout << "Disconnecting..." << std::endl;
     m_socket->stop();
     std::lock_guard lock(m_mutex);
@@ -133,9 +133,10 @@ void Client::disconnect_socket_run() {
     delete m_socket;
     m_socket = nullptr;
     std::cout << "Socket closed." << std::endl;
+    disconnect_promise.set_value();
 }
 
-void Client::disconnect() {
+std::future<void> Client::disconnect() {
     std::lock_guard lock(m_mutex);
     if (m_state == ClientState::disconnected) {
         throw InvalidStateError("Client already disconnected");
@@ -152,7 +153,11 @@ void Client::disconnect() {
     //
     // Soooo... fork a thread whose sole job is to call stop(), wait for it to
     // return, grab the mutex, then delete the socket.
-    std::thread(&Client::disconnect_socket_run, this).detach();
+    m_state = ClientState::disconnecting;
+    std::promise<void> disconnect_promise;
+    std::future<void> disconnect_future = disconnect_promise.get_future();
+    std::thread(&Client::disconnect_socket_run, this, std::move(disconnect_promise)).detach();
+    return disconnect_future;
 }
 
 ClientState Client::getState() {

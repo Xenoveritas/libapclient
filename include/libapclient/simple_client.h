@@ -93,7 +93,7 @@ public:
      * An empty string is treated as "no help" and will prevent the command from
      * being shown in help lists. If the basic help string is empty, then the
      * detailed help string is ignored.
-     * 
+     *
      * The arguments value is a string shown after the command name. This is
      * used with, for example, writeUsageHelp(const std::string&).
      *
@@ -237,7 +237,7 @@ public:
      *
      * \param message the text to write to the client terminal
      */
-    virtual void write(const std::string& message, MessageType type) override {
+    virtual void write(const std::string& message, MessageType type = MessageType::basic) override {
         m_out << message;
     }
 
@@ -245,7 +245,7 @@ public:
      *
      * \param message the message to write
      */
-    virtual void writeLn(const std::string& message, MessageType type) override {
+    virtual void writeLn(const std::string& message, MessageType type = MessageType::basic) override {
         m_out << message << std::endl;
     }
 
