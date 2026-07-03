@@ -21,7 +21,7 @@ project ("libapclient"
 )
 
 option(LIBAPCLIENT_SHARED "Compile libapclient as a shared library." OFF)
-option(LIBAPCLIENT_BUILD_EXAMPLE "Build the example client program." OFF)
+option(LIBAPCLIENT_BUILD_EXAMPLE "Build the example Archipelago client program." OFF)
 # TLS will be required before this is usable. This is currently set to off to avoid having to configure that.
 option(LIBAPCLIENT_USE_TLS "Whether to enable TLS." OFF)
 
@@ -46,7 +46,10 @@ if (NOT TARGET zlibstatic)
         GIT_TAG v1.3.2
         VERSION 1.3.1
         OPTIONS
-            "ZLIB_BUILD_EXAMPLES OFF" "ZLIB_BUILD_SHARED OFF" "ZLIB_BUILD_STATIC ON"
+            "ZLIB_BUILD_TESTING OFF"
+            "ZLIB_BUILD_SHARED OFF"
+            "ZLIB_BUILD_STATIC ON"
+            "ZLIB_INSTALL OFF"
     )
     add_library(ZLIB::ZLIB ALIAS zlibstatic)
 endif()
@@ -74,12 +77,16 @@ endif()
 set(LIBAPCLIENT_SOURCES
     "src/libapclient.cpp"
     "src/packets.cpp"
+    "src/simple_client.cpp"
     "src/utils.cpp"
 )
 
 set(LIBAPCLIENT_HEADERS
     "include/libapclient/libapclient.h"
     "include/libapclient/packets.h"
+    "include/libapclient/simple_client.h"
+    "include/libapclient/tokenizer.h"
+    "include/libapclient/tracker.h"
     "include/libapclient/utils.h"
 )
 
@@ -98,11 +105,12 @@ target_link_libraries(libapclient PUBLIC stduuid)
 
 find_package(Doxygen)
 if(Doxygen_FOUND)
+    set(DOXYGEN_USE_MDFILE_AS_MAINPAGE "README.md")
     doxygen_add_docs(docs
-        ${LIBAPCLIENT_SOURCES} ${LIBAPCLIENT_HEADERS}
+        "README.md" ${LIBAPCLIENT_SOURCES} ${LIBAPCLIENT_HEADERS}
     )
 else()
-    message(STATUS "Doxygen not found, documentation will not be generated.")
+    message(STATUS "Doxygen not found, documentation target will not be generated.")
 endif()
 
 # On macOS this requires CoreFoundation (both for looking up the cache directory

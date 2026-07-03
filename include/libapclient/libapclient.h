@@ -12,6 +12,7 @@
 #include <chrono>
 #include <mutex>
 #include <atomic>
+#include <stdexcept>
 
 #include <ixwebsocket/IXWebSocket.h>
 
@@ -191,6 +192,23 @@ enum class ClientState {
     connectionRefused
 };
 
+/*! \brief Exception raised when an attempt is made to do something while the
+ * client is in a state where it can't do it.
+ *
+ * For example, calling
+ * Client::connect(const std::string&, const std::string&, const std::string*)
+ * while the client is disconnected.
+ *
+ * Note that this exception should be checked for and caught. Checking the state
+ * prior to calling an API cannot guarantee that another thread won't change the
+ * state out from under that call.
+ */
+class InvalidStateError : public std::runtime_error {
+public:
+    explicit InvalidStateError(const std::string& what_arg) : std::runtime_error(what_arg) {}
+    explicit InvalidStateError(const char* what_arg) : std::runtime_error(what_arg) {}
+};
+
 /*! \brief The Archipelago client class.
  *
  * Handles a lot of the wire protocol for talking with the Archipelago server
@@ -287,6 +305,7 @@ public:
      * \param playerName the name of the player
      * \param password an optional password, may be `nullptr` to not send a
      *        password
+     * \throws InvalidStateError if the client is already connected
      */
     void connect(const std::string& serverUrl, const std::string& playerName, const std::string* password);
 
@@ -297,6 +316,7 @@ public:
      * for details.
      * \param serverUrl the URL for the server
      * \param playerName the name of the player
+     * \throws InvalidStateError if the client is already connected
      */
     void connect(const std::string& serverUrl, const std::string& playerName);
 
@@ -305,7 +325,8 @@ public:
 
     /*! \brief Gets the current client state.
      *
-     * This is thread-safe - the state is stored via a std::atomic.
+     * This is thread-safe - the state is stored via a std::atomic. (However,
+     * that means it can't be accessed in a `const` manner.)
      */
     ClientState getState();
 
@@ -323,6 +344,12 @@ public:
      * \param errorInfo the error information
      */
     virtual void onWebSocketConnectionFailure(const ix::WebSocketErrorInfo& errorInfo);
+
+    /*! \brief Called when the websocket closes.
+     *
+     * The client state will have been set to ClientState::disconnected.
+     */
+    virtual void onWebSocketDisconnect() {}
 
     /*! \brief Provides a packets::Connect packet to be filled out before it
      * gets sent to the server.
@@ -453,6 +480,7 @@ public:
      *
      * This converts the JSON to text via json::dumps().
      * \param payload the payload to send to the server
+     * \throws InvalidStateError if the client is not connected to a server
      */
     void sendMessage(const json& payload);
 
@@ -494,7 +522,7 @@ public:
      *
      * This indicates that the connection was successful.
      * dispatchPacket(const std::string&, const json&) will have updated
-     * the client state  to be ClientState.connected before invoking this
+     * the client state to be ClientState.connected before invoking this
      * callback.
      *
      * The default implementation does nothing.
@@ -680,7 +708,7 @@ public:
     double get_remote_time_now();
 };
 
-/*!
+/*! \brief
  * This extends the generic Client with some utilities intended to make writing
  * a tracker client easier. The tracker client maintains a list of items that
  * have been received and locations that have been checked.

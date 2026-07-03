@@ -1,12 +1,11 @@
 /*! \file packets.h
  * \brief Data structures that the Archipelago client/server send each other.
- * 
+ *
  * This contains the definitions for the following packets:
- * 
+ *
  * | Packet Name       | Sent By | Notes                                 |
  * |-------------------|---------|---------------------------------------|
  * | Bounced           | Server  | Bounced message (see Bounce)          |
- * | Connect           | Client  | Client connection request             |
  * | Connected         | Server  | Indicates connection is complete      |
  * | ConnectionRefused | Server  | When a connection error happens       |
  * | DataPackage       | Server  | Data package                          |
@@ -19,6 +18,7 @@
  * | Retrieved         | Server  | Server response for a Get             |
  * | SetReply          | Server  | Server response for a Set             |
  * | Bounce            | Client  |                                       |
+ * | Connect           | Client  | Client connection request             |
  * | ConnectUpdate     | Client  |                                       |
  * | CreateHints       | Client  |                                       |
  * | Get               | Client  |                                       |
@@ -162,7 +162,7 @@ protected:
      * \brief Convert this packet to a JSON object with the fields the
      * Archipelago MultiWorld server expects.
      *
-     * This is called with an empty JSON by to_json(json &). The  object's `cmd`
+     * This is called with an empty JSON by to_json(json &). The object's `cmd`
      * field will be set after the object is populated - this allows the usage
      * of the JSON object constructor:
      *
@@ -251,6 +251,12 @@ public:
     bool isProgression() { return flags & (int)NetworkItemFlag::progression; }
     bool isUseful() { return flags & (int)NetworkItemFlag::useful; }
     bool isTrap() { return flags & (int)NetworkItemFlag::trap; }
+    NetworkItem() : item(0), location(0), player(0), flags(0) {}
+    NetworkItem(item_id_t item,
+        location_id_t location,
+        player_id_t player,
+        int flags
+    ) : item(item), location(location), player(player), flags(flags) {}
 };
 
 /// \brief The type of slot in a game.
@@ -488,10 +494,15 @@ public:
  */
 class ReceivedItems : public Packet {
 public:
-    // The next empty slot in the list of items for the receiving client.
+    /*! \brief The next empty slot in the list of items for the receiving
+     * client.
+     */
     item_id_t index;
-    // The items which the client is receiving.
+    /*! \brief The items which the client is receiving.
+     */
     std::vector<NetworkItem> items;
+    /*! \brief Create an empty ReceivedItems packet.
+     */
     ReceivedItems() : Packet(kPacketReceivedItems), index(0), items() {}
     virtual void convert_to_json(json& j) const override;
 };

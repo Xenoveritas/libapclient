@@ -70,6 +70,10 @@ Client::Client() : m_socket() {
             this->onWebSocketConnected();
         } else if (message->type == ix::WebSocketMessageType::Error) {
             this->onWebSocketConnectionFailure(message->errorInfo);
+        } else if (message->type == ix::WebSocketMessageType::Close) {
+            // Mark ourselves as disconnected
+            this->m_state = ClientState::disconnected;
+            this->onWebSocketDisconnect();
         }
     });
     // Archipelago wants per message deflate enabled and will currently generate a warning if it isn't
@@ -85,6 +89,9 @@ Client::~Client() {
 void Client::connect(const std::string& serverUrl, const std::string& playerName, const std::string* password) {
     // Grab the lock for this
     std::lock_guard lock(m_mutex);
+    if (m_state != ClientState::disconnected) {
+        throw InvalidStateError("client is already connected");
+    }
     m_playerName = playerName;
     if (password != nullptr) {
         m_password = *password;
@@ -444,11 +451,6 @@ void TrackerClient::updateReceivedItems(const std::vector<packets::NetworkItem>&
     }
 }
 
-/// <summary>
-/// Update checked location information. DOES NOT LOCK THE MUTEX.
-/// </summary>
-/// <param name="newChecks"></param>
-/// <param name="reset"></param>
 void TrackerClient::updateCheckedLocations(const std::vector<location_id_t>& newLocations, bool reset) {
     if (reset) {
         m_checkedLocationSet.clear();
@@ -462,9 +464,6 @@ void GameClient::onReceivedItems(const packets::ReceivedItems& receivedItems) {
     // But also add them to our deque
 }
 
-/// <summary>
-/// Push items to the queue. DOES NOT LOCK THE MUTEX.
-/// </summary>
 void GameClient::pushMultipleItems(const std::vector<packets::NetworkItem>& newItems) {
     m_itemDeque.insert(m_itemDeque.end(), newItems.cbegin(), newItems.cend());
 }
