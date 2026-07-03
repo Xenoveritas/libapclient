@@ -38,6 +38,7 @@ void SimpleClient::addAlias(const std::string& name, const std::string& original
 void SimpleClient::addDefaultCommands() {
     addCommand("help", commands::help, "show help", "provide help about how to use a command or detailed help about a specific command");
     addCommand("connect", commands::connect, "connect to the server");
+    addCommand("disconnect", commands::disconnect, "disconnect from the server");
 }
 
 const CommandFunction* SimpleClient::lookupCommand(const std::string& name) const {
@@ -115,6 +116,18 @@ void connect(SimpleClient& client, const std::vector<std::string>& arguments) {
         client.connect(url, player, password);
     } catch (const InvalidStateError&) {
         client.write("Cannot connect: already connected.", MessageType::error);
+    }
+}
+
+void disconnect(SimpleClient& client, const std::vector<std::string>& arguments) {
+    if (arguments.size() > 1) {
+        client.write("Usage: ", MessageType::error);
+        client.writeLn(arguments[0], MessageType::error);
+    }
+    try {
+        client.disconnect();
+    } catch (const InvalidStateError&) {
+        client.write("Cannot disconnect: already disconnected.", MessageType::error);
     }
 }
 

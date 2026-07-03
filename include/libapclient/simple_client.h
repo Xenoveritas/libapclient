@@ -50,6 +50,7 @@ namespace commands {
 /*! \brief starts the client connection process
  */
 void connect(SimpleClient& client, const std::vector<std::string>& arguments);
+void disconnect(SimpleClient& client, const std::vector<std::string>& arguments);
 void help(SimpleClient& client, const std::vector<std::string>& arguments);
 
 }
@@ -149,9 +150,10 @@ public:
      * \param message the message the user wrote
      */
     virtual void handleSay(const std::string& message) {
-        if (isFullyConnected()) {
+        try {
             sendSay(message);
-        } else {
+        } catch (const InvalidStateError&) {
+            // This has a slight chance of generating the wrong message in weird circumstances.
             if (isDisconnected()) {
                 writeLn("Cannot send a message to the server while disconnected.");
             } else {

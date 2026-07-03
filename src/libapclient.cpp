@@ -58,40 +58,49 @@ double ClientRoomInfo::get_remote_time_now() {
     return time + ((std::chrono::duration<double>) ticks).count();
 }
 
-Client::Client() : m_socket() {
-    // Register the callback (as m_socket is part of this class, capturing this is fine -
-    // m_socket will always exist for very slightly less time than this will)
-    m_socket.setOnMessageCallback([this](const ix::WebSocketMessagePtr& message) {
-        if (message->type == ix::WebSocketMessageType::Message) {
-            // Pass this off to be parsed
-            this->receiveMessage(message->str);
-        } else if (message->type == ix::WebSocketMessageType::Open) {
-            this->m_state = ClientState::websocketConnected;
-            this->onWebSocketConnected();
-        } else if (message->type == ix::WebSocketMessageType::Error) {
-            this->onWebSocketConnectionFailure(message->errorInfo);
-        } else if (message->type == ix::WebSocketMessageType::Close) {
-            // Mark ourselves as disconnected
-            this->m_state = ClientState::disconnected;
-            this->onWebSocketDisconnect();
-        }
-    });
-    // Archipelago wants per message deflate enabled and will currently generate a warning if it isn't
-    m_socket.enablePerMessageDeflate();
-    // Do not automatically attempt to reconnect - this likely requires additional
-    // protocol support to properly redo the client auth
-    m_socket.disableAutomaticReconnection();
+Client::Client() {
 }
 Client::~Client() {
+    if (m_socket != nullptr) {
+        delete m_socket;
+        m_socket = nullptr;
+    }
     // The web socket will stop automatically on deconstruction, so just let that happen on its own
 }
 
 void Client::connect(const std::string& serverUrl, const std::string& playerName, const std::string* password) {
     // Grab the lock for this
     std::lock_guard lock(m_mutex);
-    if (m_state != ClientState::disconnected) {
+    if (m_state != ClientState::disconnected || m_socket != nullptr) {
         throw InvalidStateError("client is already connected");
     }
+    // Create the socket
+    m_socket = new ix::WebSocket();
+    // Register the callback (as m_socket is part of this class, capturing this is fine -
+    // m_socket will always exist for very slightly less time than this will)
+    m_socket->setOnMessageCallback([this](const ix::WebSocketMessagePtr& message) {
+        if (message->type == ix::WebSocketMessageType::Message) {
+            // Pass this off to be parsed
+            this->receiveMessage(message->str);
+        }
+        else if (message->type == ix::WebSocketMessageType::Open) {
+            this->m_state = ClientState::websocketConnected;
+            this->onWebSocketConnected();
+        }
+        else if (message->type == ix::WebSocketMessageType::Error) {
+            this->onWebSocketConnectionFailure(message->errorInfo);
+        }
+        else if (message->type == ix::WebSocketMessageType::Close) {
+            // Mark ourselves as disconnected
+            this->m_state = ClientState::disconnected;
+            this->onWebSocketDisconnect();
+        }
+        });
+    // Archipelago wants per message deflate enabled and will currently generate a warning if it isn't
+    m_socket->enablePerMessageDeflate();
+    // Do not automatically attempt to reconnect - this likely requires additional
+    // protocol support to properly redo the client auth
+    m_socket->disableAutomaticReconnection();
     m_playerName = playerName;
     if (password != nullptr) {
         m_password = *password;
@@ -101,14 +110,14 @@ void Client::connect(const std::string& serverUrl, const std::string& playerName
     // For now, just make sure it starts with ws:// or wss://
     if (serverUrl.starts_with("ws://") || serverUrl.starts_with("wss://")) {
         // Use as-is
-        m_socket.setUrl(serverUrl);
+        m_socket->setUrl(serverUrl);
     } else {
         // In this case, just add "wss://" to it
-        m_socket.setUrl(std::string("wss://").append(serverUrl));
+        m_socket->setUrl(std::string("wss://").append(serverUrl));
     }
     // At this point, start up the socket
-    std::cout << "Starting up socket " << m_socket.getUrl() << std::endl;
-    m_socket.start();
+    std::cout << "Starting up socket " << m_socket->getUrl() << std::endl;
+    m_socket->start();
     m_state = ClientState::connecting;
 }
 
@@ -116,11 +125,34 @@ void Client::connect(const std::string& serverUrl, const std::string& playerName
     connect(serverUrl, playerName, nullptr);
 }
 
+void Client::disconnect_socket_run() {
+    std::cout << "Disconnecting..." << std::endl;
+    m_socket->stop();
+    std::lock_guard lock(m_mutex);
+    m_state = ClientState::disconnected;
+    delete m_socket;
+    m_socket = nullptr;
+    std::cout << "Socket closed." << std::endl;
+}
+
 void Client::disconnect() {
     std::lock_guard lock(m_mutex);
-    // Use close() and not stop(): stop() attempts to join the thread and this can happen in any thread
-    m_socket.close();
-    m_state = ClientState::disconnected;
+    if (m_state == ClientState::disconnected) {
+        throw InvalidStateError("Client already disconnected");
+    }
+    // So here's where things get... hairy.
+    // m_socket->stop() attempts to join its thread, and there's a chance this can
+    // get called on the same thread (for example, the server indicates that the
+    // client is incompatible, meaning there's no point in staying connected).
+    //
+    // thread.join() will throw a std::runtime_error when it detects that deadlock
+    // condition (as a thread can't wait on itself).
+    //
+    // ix::~WebSocket() calls stop().
+    //
+    // Soooo... fork a thread whose sole job is to call stop(), wait for it to
+    // return, grab the mutex, then delete the socket.
+    std::thread(&Client::disconnect_socket_run, this).detach();
 }
 
 ClientState Client::getState() {
@@ -236,12 +268,13 @@ void Client::sendPacket(const packets::Packet& packet) {
 }
 
 void Client::sendMessage(const json& payload) {
-    // Despite this being a public API, it should never grab the mutex: it doesn't need to (IXWebSocket
-    // has its own mutex to ensure messages are queued properly) and some internal APIs may call
-    // this while holding the mutex.
+    std::lock_guard lock(m_mutex);
+    if (m_socket == nullptr) {
+        throw new InvalidStateError("Can't send message when disconnected");
+    }
     const std::string text = payload.dump();
     std::cout << "Sending: " << text << std::endl;
-    m_socket.sendUtf8Text(text);
+    m_socket->sendUtf8Text(text);
 }
 
 void Client::onRoomInfo(const packets::RoomInfo& roomInfo) {

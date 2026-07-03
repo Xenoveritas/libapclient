@@ -254,7 +254,7 @@ public:
 class Client {
 protected:
     /// The underlying web socket.
-    ix::WebSocket m_socket;
+    ix::WebSocket* m_socket{ nullptr };
 
     /*! \brief The current room info.
      *
@@ -287,6 +287,12 @@ private:
      * platforms, this means client state changes may be entirely lock-free.
      */
     std::atomic<ClientState> m_state{ ClientState::disconnected };
+
+    /*! \brief Close the socket in another thread.
+     *
+     * For... reasons
+     */
+    void disconnect_socket_run();
 
 public:
     Client();
