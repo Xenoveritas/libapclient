@@ -76,13 +76,16 @@ endif()
 
 set(LIBAPCLIENT_SOURCES
     "src/libapclient.cpp"
+    "src/logger.cpp"
     "src/packets.cpp"
     "src/simple_client.cpp"
+    "src/tracker.cpp"
     "src/utils.cpp"
 )
 
 set(LIBAPCLIENT_HEADERS
     "include/libapclient/libapclient.h"
+    "include/libapclient/logger.h"
     "include/libapclient/packets.h"
     "include/libapclient/simple_client.h"
     "include/libapclient/tokenizer.h"
@@ -98,6 +101,7 @@ endif()
 
 add_library(libapclient ${LIBAPCLIENT_LINK_MODE} ${LIBAPCLIENT_SOURCES} ${LIBAPCLIENT_HEADERS})
 
+target_compile_definitions(libapclient PUBLIC "-DLIBAPCLIENT_ENABLE_LOGGING")
 target_include_directories(libapclient PUBLIC "include")
 target_link_libraries(libapclient PUBLIC nlohmann_json::nlohmann_json)
 target_link_libraries(libapclient PUBLIC ixwebsocket::ixwebsocket)

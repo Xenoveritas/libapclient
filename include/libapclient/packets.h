@@ -257,6 +257,7 @@ public:
         player_id_t player,
         int flags
     ) : item(item), location(location), player(player), flags(flags) {}
+    NetworkItem(const NetworkItem&) = default;
 };
 
 /// \brief The type of slot in a game.
@@ -368,6 +369,8 @@ public:
 class SlotInfo {
 public:
     std::unordered_map<player_id_t, NetworkSlot> slot_info{};
+
+    const NetworkSlot* getNetworkSlotByName(const std::string& name) const;
 };
 
 /*! \brief A packet sent by the server that describes the game being played.
@@ -472,6 +475,12 @@ public:
 
     Connected() : Packet(kPacketConnected) {}
     virtual void convert_to_json(json& j) const override;
+
+    /*! \brief Look up a player's information based on their name.
+     *
+     * As the player data is a std::vector, this takes up to O(n) time.
+     */
+    const NetworkPlayer* getPlayer(const std::string& name) const;
 };
 
 /*! \brief A packet indicating changes in room info.

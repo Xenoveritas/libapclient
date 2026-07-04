@@ -7,6 +7,7 @@
 
 #include <map>
 #include <vector>
+#include <unordered_map>
 
 #include "packets.h"
 
@@ -109,6 +110,19 @@ public:
         }
         return result;
     }
+
+    /*! \brief Get all known location data.
+     *
+     * \return the set of locations
+     */
+    std::vector<location_id_t> getLocationIds() {
+        std::vector<location_id_t> result;
+        result.reserve(m_locations.size());
+        for (auto it = m_locations.cbegin(); it != m_locations.cend(); ++it) {
+            result.push_back(it->first);
+        }
+        return result;
+    }
 };
 
 /*! \brief Track received items.
@@ -119,21 +133,107 @@ public:
  * \tparam I The class that holds the item info.
  * \tparam Allocator the allocator the underlying vector uses.
  */
-template<class I, class Allocator = std::allocator<I>> class ItemTracker {
-protected:
+template<class I = packets::NetworkItem, class Allocator = std::allocator<I>> class ItemTracker {
+public:
     /*! \brief The index of the last item given to the player. */
-    size_t m_index;
+    size_t index;
     /*! \brief The list of items that the client has received.
      *
      * Archipelago keeps an ordered list of the item IDs that a client has
      * received.
      */
-    std::vector<I, Allocator> m_items;
+    std::vector<I, Allocator> items;
+
+    /*! \brief Create a new item tracker.
+     */
+    ItemTracker() : index(0), items() {}
+    /*! \brief Create a new item tracker with the given index.
+     */
+    ItemTracker(size_t aIndex) : index(aIndex), items() {}
 
     ItemTracker& operator<<(const packets::ReceivedItems& receivedItems) {
         return operator+=(receivedItems.items);
     }
-    ItemTracker& operator+=(const std::vector<packets::NetworkItem>& items) {}
+    ItemTracker& operator+=(const std::vector<packets::NetworkItem>& newItems) {
+        // Preemptively prepare for this
+        items.reserve(items.size() + newItems.size());
+        for (auto& item : newItems) {
+            items.push_back(I(item));
+        }
+        return *this;
+    }
+};
+
+/*! \brief A map of things to their IDs to a thing and also back.
+ *
+ * This is kind of specialized for GameData's use.
+ */
+template<typename ID, typename T> class IDMap {
+private:
+    std::map<ID, T> idToObject;
+    std::unordered_map<T, ID> objectToId;
+public:
+    IDMap() : idToObject(), objectToId() {}
+    ~IDMap() {}
+
+    void insert(ID id, T obj) {
+        idToObject.insert({ id, obj });
+        objectToId.insert({ obj, id });
+    }
+
+    /*! \brief Attempt to get an object by and ID.
+     * \return a pointer to the object or nullptr if it doesn't exist
+     */
+    const T* getById(ID id) const {
+        auto iter = idToObject.find(id);
+        if (iter == idToObject.end()) {
+            return nullptr;
+        }
+        return &(iter->second);
+    }
+
+    const std::optional<ID> getByObject(T obj) const  {
+        auto iter = objectToId.find(obj);
+        if (iter == idToObject.end()) {
+            return std::nullopt;
+        }
+        return iter.get();
+    }
+
+    bool empty() const {
+        return idToObject.empty();
+    }
+
+    std::vector<T> getObjects() {
+        std::vector<T> result;
+        result.reserve(idToObject.size());
+        for (auto& pair : idToObject) {
+            result.push_back(pair.second);
+        }
+        return result;
+    }
+};
+
+/*! \brief Store data possibly from a packets::DataPackage.
+ */
+class GameData {
+public:
+    IDMap<location_id_t, std::string> locations;
+    IDMap<item_id_t, std::string> items;
+    std::string checksum;
+
+    GameData() : locations(), items(), checksum() {}
+    GameData(const json& gamePackage);
+    ~GameData() {}
+
+    GameData& operator<<(const json& gamePackage);
+    void loadGame(const packets::DataPackage& package, const std::string& gameName);
+
+    std::string getItemName(item_id_t id);
+    std::string getLocationName(location_id_t id);
+
+    std::vector<std::string> getItemNames();
+    std::vector<std::string> getLocationNames();
 };
 
 }

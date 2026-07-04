@@ -3,6 +3,7 @@
  */
 
 #include "libapclient/libapclient.h"
+#include "libapclient/logger.h"
 
 #include <ratio>
 #include <chrono>
@@ -116,7 +117,7 @@ void Client::connect(const std::string& serverUrl, const std::string& playerName
         m_socket->setUrl(std::string("wss://").append(serverUrl));
     }
     // At this point, start up the socket
-    std::cout << "Starting up socket " << m_socket->getUrl() << std::endl;
+    LIBAPCLIENT_LOG("Starting up socket {}", m_socket->getUrl());
     m_socket->start();
     m_state = ClientState::connecting;
 }
@@ -126,13 +127,13 @@ void Client::connect(const std::string& serverUrl, const std::string& playerName
 }
 
 void Client::disconnect_socket_run(std::promise<void> disconnect_promise) {
-    std::cout << "Disconnecting..." << std::endl;
+    LIBAPCLIENT_LOG("Disconnecting...");
     m_socket->stop();
     std::lock_guard lock(m_mutex);
     m_state = ClientState::disconnected;
     delete m_socket;
     m_socket = nullptr;
-    std::cout << "Socket closed." << std::endl;
+    LIBAPCLIENT_LOG("Socket closed.");
     disconnect_promise.set_value();
 }
 
@@ -220,7 +221,7 @@ bool Client::sendConnect() {
 
 // Send a Sync message (which is empty).
 void Client::sendSync() {
-    auto j = json{ { "cmd", packets::kPacketSync } };
+    auto j = json::array({ json::object({ { "cmd", packets::kPacketSync } }) });
     sendMessage(j);
 }
 
@@ -274,7 +275,7 @@ void Client::sendUnlockedPacket(const packets::Packet& packet) {
     packet.to_json(j);
     j = json::array({ j });
     const std::string text = j.dump();
-    std::cout << "Sending: " << text << std::endl;
+    LIBAPCLIENT_LOG("Sending: {}", text);
     m_socket->sendUtf8Text(text);
 }
 
@@ -284,7 +285,7 @@ void Client::sendMessage(const json& payload) {
         throw InvalidStateError("Can't send message when disconnected");
     }
     const std::string text = payload.dump();
-    std::cout << "Sending: " << text << std::endl;
+    LIBAPCLIENT_LOG("Sending: {}", text);
     m_socket->sendUtf8Text(text);
 }
 
@@ -314,7 +315,7 @@ void Client::onInvalidPacket(const packets::InvalidPacket& invalidPacket) {
 
 void Client::parseMessage(const std::string& message) {
     // For debugging:
-    std::cout << "Received: " << message << std::endl;
+    LIBAPCLIENT_LOG("Received: {}", message);
     // Try and parse this as JSON
     json payload;
     try {
@@ -443,7 +444,12 @@ void Client::onJsonError(const json::exception& error) {
 }
 
 void Client::logError(const std::string& message) {
+    LIBAPCLIENT_LOG("{}", message);
+    // The above will double-log on non-Windows platforms, unless we exclude
+    // the following:
+#if !defined(LIBAPCLIENT_ENABLE_LOGGING) || defined(WIN32)
     std::cerr << message << std::endl;
+#endif
 }
 
 double Client::get_remote_time_now() {

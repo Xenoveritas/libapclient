@@ -79,7 +79,7 @@ void SimpleClient::addDefaultCommands() {
     addCommand("connect", commands::connect, {
         .help = "connect to the server",
         .arguments = "<server> <name> [password]",
-        .detailedHelp = "connect to the server via the given WebSocket URL, player name, and password"
+        .detailedHelp = "Connect to the server via the given WebSocket URL, player name, and optional password.\n\nIf a connection was already established, then /connect can be used with no arguments.\n\nIf the game requires a password and none was given, /password can be used to give it, and then /connect can be used to continue the connection."
     });
     addCommand("disconnect", commands::disconnect, "disconnect from the server");
     addCommand("ready", commands::ready, "mark self as ready on the server");
@@ -128,7 +128,7 @@ void SimpleClient::writeDetailedHelp(const std::string& name) {
             writeLn(std::format("No detailed help is available for /{}.", name), MessageType::help);
         }
     } else {
-        writeLn(std::format("/{}", name), MessageType::help);
+        writeLn(std::format("/{} {}", name, iter->second->arguments), MessageType::help);
         writeLn();
         if (iter->second->detailedHelp.empty()) {
             writeLn(iter->second->basicHelp, MessageType::help);
@@ -144,7 +144,7 @@ void SimpleClient::writeHelp() {
         write(std::format("/{}", helpData->name, helpData->arguments), MessageType::help);
         if (!helpData->arguments.empty()) {
             write(" ", MessageType::help);
-            write(helpData->arguments);
+            write(helpData->arguments, MessageType::help);
         }
         writeLn();
         writeLn(std::format("    {}", helpData->basicHelp), MessageType::help);

@@ -170,7 +170,7 @@ public:
      */
     void addAlias(const std::string& name, const std::string& originalCommand);
 
-    /** \brief Look up a command function.
+    /*! \brief Look up a command function.
      *
      * \param name the name of the command to look up
      * \return the command function for that name or nullptr if there is no
@@ -189,6 +189,13 @@ public:
      * \param message the message to write
      */
     virtual void writeLn(const std::string& message = std::string(), MessageType type = MessageType::basic) = 0;
+
+    /*! \brief Overrides the default behavior to instead invoke
+     * write(const std::string&, MessageType) using MessageType::error.
+     */
+    void logError(const std::string& message) override {
+        writeLn(message, MessageType::error);
+    }
 
     /*! \brief override to forward a message from the client to
      * write(const std::string& message, MessageType type = MessageType::basic)

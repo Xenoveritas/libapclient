@@ -9,6 +9,7 @@
 #include "libapclient/tokenizer.h"
 #include "libapclient/tracker.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 #include <ftxui/component/app.hpp>
@@ -101,6 +102,10 @@ public:
 // Forward declarations of commands:
 void commandQuit(archipelago::SimpleClient& client, const std::vector<std::string>& args);
 void commandStatus(archipelago::SimpleClient& client, const std::vector<std::string>& args);
+void commandReceived(archipelago::SimpleClient& client, const std::vector<std::string>& args);
+void commandMissing(archipelago::SimpleClient& client, const std::vector<std::string>& args);
+void commandListItems(archipelago::SimpleClient& client, const std::vector<std::string>& args);
+void commandListLocations(archipelago::SimpleClient& client, const std::vector<std::string>& args);
 
 /*! \brief APClient implementation, using [FTXUI](https://github.com/ArthurSonzogni/FTXUI)
  * to generate the client UI.
@@ -111,6 +116,10 @@ private:
     ftxui::Closure m_quitClosure;
     ConsoleLine m_lastLine;
     ftxui::App* m_app;
+    std::string m_gameName;
+    archipelago::GameData m_playerGameData;
+    archipelago::LocationTracker<bool> m_locationTracker;
+    archipelago::ItemTracker<> m_itemTracker;
 
     ftxui::Element RenderConsole() {
         ftxui::Elements lines;
@@ -122,13 +131,17 @@ private:
         });
     }
 public:
-    APClient() : archipelago::SimpleClient(), m_console(), m_lastLine(), m_app(nullptr) {
+    APClient() : archipelago::SimpleClient(), m_console(), m_lastLine(), m_app(nullptr), m_locationTracker(), m_itemTracker() {
         // Add our commands
         addCommand("quit", commandQuit, "exits the client");
+        addCommand("received", commandReceived, "lists items that have been received");
+        addCommand("missing", commandMissing, "lists locations that have not been checked");
+        addCommand("items", commandListItems, "list all items in the current game");
+        addCommand("locations", commandListLocations, "list all locations in the current game");
         addCommand("say", command::say, {
             .help = "sends a give chat message",
             .arguments = "<message>...",
-            .detailedHelp = "Sends a given cache message. This may not function quite the same way as might be expected: the message will go through the general tokenizer before being sent. This means \"/say 'a message' will have the quotes removed when sent, and extra spaces (like \"/say   a   message\") will be removed."
+            .detailedHelp = "Sends a given chat message. This may not function quite the same way as might be expected: the message will go through the general tokenizer before being sent. This means \"/say 'a message' will have the quotes removed when sent, and extra spaces (like \"/say  a  message\") will be removed (producing \"a message\")."
         });
         addCommand("status", commandStatus, "shows current client status");
         addCommand("uuid", command::uuid, {
@@ -157,6 +170,34 @@ public:
         if (m_app != nullptr) {
             m_app->RequestAnimationFrame();
         }
+    }
+
+    virtual void onConnected(const archipelago::packets::Connected& connected) override {
+        // Request the data package for the game our player is playing, if possible
+        auto slotInfo = connected.slot_info.getNetworkSlotByName(m_playerName);
+        if (slotInfo != nullptr) {
+            write("Connected with player playing ", archipelago::MessageType::basic);
+            writeLn(slotInfo->game, archipelago::MessageType::basic);
+            m_gameName = slotInfo->game;
+            sendGetDataPackage({ slotInfo->game });
+        } else {
+            m_gameName.clear();
+            writeLn("Did not see player in player data", archipelago::MessageType::basic);
+        }
+        // Load up location data
+        m_locationTracker << connected;
+        // Ask for a sync
+        sendSync();
+    }
+
+    virtual void onReceivedItems(const archipelago::packets::ReceivedItems& receivedItems) override {
+        std::lock_guard lock(m_mutex);
+        // Store it
+        m_itemTracker << receivedItems;
+    }
+
+    virtual void onDataPackage(const archipelago::packets::DataPackage& dataPackage) override {
+        m_playerGameData.loadGame(dataPackage, m_gameName);
     }
 
     void writeStatus() {
@@ -217,6 +258,61 @@ public:
         }
     }
 
+    void writeReceived() {
+        std::lock_guard lock(m_mutex);
+        writeLn("The following items have been received:");
+        if (m_itemTracker.items.empty()) {
+            writeLn("   No items marked as received yet.");
+        }
+        for (auto item : m_itemTracker.items) {
+            writeLn(std::format(" - {} (from {})", item.item, item.player));
+        }
+    }
+
+    void writeMissing() {
+        std::lock_guard lock(m_mutex);
+        writeLn("The following locations have not been checked:");
+        auto locations = m_locationTracker.getLocationIds();
+        if (locations.empty()) {
+            writeLn("   No items marked as received yet.");
+        } else {
+            for (auto location : locations) {
+                if (!m_locationTracker.getLocation(location)) {
+                    writeLn(std::format(" - {}", m_playerGameData.getLocationName(location)));
+                }
+            }
+        }
+    }
+
+    void writeItems() {
+        std::lock_guard lock(m_mutex);
+        writeLn("The following items are listed in the current game:");
+        if (m_playerGameData.items.empty()) {
+            writeLn("   No items found. (Game data not available?)");
+        } else {
+            auto items = m_playerGameData.getItemNames();
+            std::sort(items.begin(), items.end());
+            for (auto item : items) {
+                writeLn(std::format(" - {}", item));
+            }
+        }
+    }
+
+    void writeLocations() {
+        std::lock_guard lock(m_mutex);
+        writeLn("The following locations are listed in the current game:");
+        if (m_playerGameData.items.empty()) {
+            writeLn("   No locations found. (Game data not available?)");
+        }
+        else {
+            auto locations = m_playerGameData.getLocationNames();
+            std::sort(locations.begin(), locations.end());
+            for (auto location : locations) {
+                writeLn(std::format(" - {}", location));
+            }
+        }
+    }
+
     /*! \brief Run the client.
      */
     void run() {
@@ -267,6 +363,22 @@ void commandQuit(archipelago::SimpleClient& client, const std::vector<std::strin
 
 void commandStatus(archipelago::SimpleClient& client, const std::vector<std::string>& args) {
     reinterpret_cast<APClient&>(client).writeStatus();
+}
+
+void commandReceived(archipelago::SimpleClient& client, const std::vector<std::string>& args) {
+    reinterpret_cast<APClient&>(client).writeReceived();
+}
+
+void commandMissing(archipelago::SimpleClient& client, const std::vector<std::string>& args) {
+    reinterpret_cast<APClient&>(client).writeMissing();
+}
+
+void commandListItems(archipelago::SimpleClient& client, const std::vector<std::string>& args) {
+    reinterpret_cast<APClient&>(client).writeItems();
+}
+
+void commandListLocations(archipelago::SimpleClient& client, const std::vector<std::string>& args) {
+    reinterpret_cast<APClient&>(client).writeLocations();
 }
 
 int main(int argc, char* argv[]) {

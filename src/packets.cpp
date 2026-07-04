@@ -13,6 +13,41 @@
 namespace archipelago {
 namespace packets {
 
+
+// Packet helper implementations
+
+bool ConnectionRefused::has_error(const std::string& error) const {
+    // Check to see if the error is in the error list. This takes o(n) time -
+    // but given that the error list will be at most five elements (if you
+    // manage to hit every error Archipelago can return) this is still likely
+    // faster than trying to "optimize" a lookup.
+    for (auto it = errors.cbegin(); it != errors.cend(); ++it) {
+        if (error == *it) {
+            return true;
+        }
+    }
+    return false;
+}
+
+const NetworkSlot* SlotInfo::getNetworkSlotByName(const std::string& name) const {
+    // can't find, but can:
+    for (auto& entry : slot_info) {
+        if (entry.second.name == name) {
+            return &entry.second;
+        }
+    }
+    return nullptr;
+}
+
+const NetworkPlayer* Connected::getPlayer(const std::string& name) const {
+    for (auto& player : players) {
+        if (player.name == name) {
+            return &player;
+        }
+    }
+    return nullptr;
+}
+
 // Conversion functions. The library-provided macros don't *quite* do the trick
 // due to some requirements imposed by the Python code this is interacting with.
 
@@ -47,26 +82,10 @@ namespace packets {
 #define OBJ_ADD_FIELD_IF_EXISTS(json_object, field) if (field.has_value()) { json_object[#field] = (*field); }
 
 #define DEFER_TO_CLASS(cls) void to_json(json& j, const cls& obj) { obj.to_json(j); }
-/// \endcond
-// Packet helper implementations
-
-bool ConnectionRefused::has_error(const std::string& error) const {
-    // Check to see if the error is in the error list. This takes o(n) time -
-    // but given that the error list will be at most five elements (if you
-    // manage to hit every error Archipelago can return) this is still likely
-    // faster than trying to "optimize" a lookup.
-    for (auto it = errors.cbegin(); it != errors.cend(); ++it) {
-        if (error == *it) {
-            return true;
-        }
-    }
-    return false;
-}
 
 // CONVERSION FUNCTIONS
 //
 // These are alphabetized to keep the order somewhat understandable.
-/// \cond
 void from_json(const json& j, Bounce& bounce) {
     READ_OPTIONAL_FIELD(j, bounce, std::vector<std::string>, games);
     READ_OPTIONAL_FIELD(j, bounce, std::vector<player_id_t>, slots);
