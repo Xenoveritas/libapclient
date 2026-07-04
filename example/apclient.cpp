@@ -152,6 +152,12 @@ public:
         addCommand("cachedir", command::cacheDir);
     }
 
+    virtual void createConnect(archipelago::packets::Connect& connect) override {
+        // Take over this ourselves, mainly to do:
+        connect.items_handling = archipelago::packets::ItemsHandling::all;
+        connect.tags.push_back(archipelago::tag::kTextOnly);
+    }
+
     virtual void write(const std::string& message, archipelago::MessageType type = archipelago::MessageType::basic) override {
         m_lastLine.appendText(message, type);
     }
@@ -186,8 +192,6 @@ public:
         }
         // Load up location data
         m_locationTracker << connected;
-        // Ask for a sync
-        sendSync();
     }
 
     virtual void onReceivedItems(const archipelago::packets::ReceivedItems& receivedItems) override {
@@ -265,7 +269,7 @@ public:
             writeLn("   No items marked as received yet.");
         }
         for (auto item : m_itemTracker.items) {
-            writeLn(std::format(" - {} (from {})", item.item, item.player));
+            writeLn(std::format(" - {} (from {})", m_playerGameData.getItemName(item.item), item.player));
         }
     }
 
