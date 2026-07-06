@@ -10,7 +10,11 @@ if (NOT TARGET ftxui::ftxui)
     )
 endif()
 
-add_executable(apclient "apclient.cpp" "commands.cpp" "commands.h")
+add_executable(apclient
+    "apclient.cpp"
+    "commands.cpp" "commands.h"
+    "console_component.cpp" "console_component.h"
+)
 target_link_libraries(apclient PRIVATE libapclient)
 target_link_libraries(apclient PRIVATE ftxui::ftxui)
 

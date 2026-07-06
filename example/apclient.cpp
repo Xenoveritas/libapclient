@@ -8,6 +8,7 @@
 #include "libapclient/simple_client.h"
 #include "libapclient/tokenizer.h"
 #include "libapclient/tracker.h"
+#include "libapclient/logger.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -16,88 +17,14 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
-#include "ftxui/screen/color.hpp"
+#include <ftxui/screen/color.hpp>
 
 // Tell Windows not to break everything.
 #define NOMINMAX
 #include <ixwebsocket/IXNetSystem.h>
 
 #include "commands.h"
-
-class ConsoleSpan {
-private:
-    std::string text;
-    archipelago::MessageType type;
-public:
-    ConsoleSpan(const std::string& aText, archipelago::MessageType aType) : text(aText), type(aType) {}
-    const std::string& getText() const { return text; }
-    archipelago::MessageType getType() const { return type; }
-    void appendText(const std::string& newText) {
-        text.append(newText);
-    }
-
-    ftxui::Element Render() {
-        auto element = ftxui::paragraph(text);
-        switch (type) {
-        case archipelago::MessageType::basic:
-            break;
-        case archipelago::MessageType::error:
-            element |= ftxui::color(ftxui::Color::Red);
-            break;
-        case archipelago::MessageType::help:
-            element |= ftxui::color(ftxui::Color::BlueLight);
-            break;
-        case archipelago::MessageType::server:
-            break;
-        }
-        return element;
-    }
-};
-
-class ConsoleLine {
-private:
-    std::vector<ConsoleSpan> spans;
-public:
-    ConsoleLine() : spans() {}
-    // Copy constructor
-    ConsoleLine(const ConsoleLine& other) = default;
-
-    void appendText(const std::string& newText, archipelago::MessageType type) {
-        if (spans.empty()) {
-            // Just add a new span
-            spans.push_back(std::move(ConsoleSpan(newText, type)));
-        } else {
-            // Check if the back span is the same type
-            ConsoleSpan& existing = spans.back();
-            if (existing.getType() == type) {
-                existing.appendText(newText);
-            } else {
-                // Otherwise, make a new span
-                spans.push_back(std::move(ConsoleSpan(newText, type)));
-            }
-        }
-    }
-
-    void clear() {
-        spans.clear();
-    }
-
-    ftxui::Element Render() {
-        if (spans.empty()) {
-            return ftxui::text("");
-        }
-        if (spans.size() == 1) {
-            return spans.front().Render();
-        }
-        // Otherwise, build a vbox
-        ftxui::Elements elements;
-        elements.reserve(spans.size());
-        for (auto& span : spans) {
-            elements.push_back(span.Render());
-        }
-        return ftxui::hflow(elements);
-    }
-};
+#include "console_component.h"
 
 // Forward declarations of commands:
 void commandQuit(archipelago::SimpleClient& client, const std::vector<std::string>& args);
@@ -112,26 +39,17 @@ void commandListLocations(archipelago::SimpleClient& client, const std::vector<s
  */
 class APClient : public archipelago::SimpleClient {
 private:
-    std::vector<ConsoleLine> m_console;
+    // ftxui *really* wants this to be a shared pointer
+    std::shared_ptr<ConsoleComponent> m_console;
     ftxui::Closure m_quitClosure;
-    ConsoleLine m_lastLine;
     ftxui::App* m_app;
     std::string m_gameName;
     archipelago::GameData m_playerGameData;
     archipelago::LocationTracker<bool> m_locationTracker;
     archipelago::ItemTracker<> m_itemTracker;
 
-    ftxui::Element RenderConsole() {
-        ftxui::Elements lines;
-        for (auto& line : m_console) {
-            lines.push_back(line.Render());
-        }
-        return ftxui::flexbox(lines, {
-            .direction = ftxui::FlexboxConfig::Direction::Column
-        });
-    }
 public:
-    APClient() : archipelago::SimpleClient(), m_console(), m_lastLine(), m_app(nullptr), m_locationTracker(), m_itemTracker() {
+    APClient() : archipelago::SimpleClient(), m_console(new ConsoleComponent()), m_app(nullptr), m_locationTracker(), m_itemTracker() {
         // Add our commands
         addCommand("quit", commandQuit, "exits the client");
         addCommand("received", commandReceived, "lists items that have been received");
@@ -159,7 +77,7 @@ public:
     }
 
     virtual void write(const std::string& message, archipelago::MessageType type = archipelago::MessageType::basic) override {
-        m_lastLine.appendText(message, type);
+        m_console->write(message, type);
     }
 
     /*! \brief Write a line, ending with a newline, to the client.
@@ -167,12 +85,8 @@ public:
      * \param message the message to write
      */
     virtual void writeLn(const std::string& message = std::string(), archipelago::MessageType type = archipelago::MessageType::basic) override {
-        // Write the current message
-        write(message, type);
-        // And append our last line to the static lines
-        m_console.push_back(m_lastLine);
-        // And clear the last line
-        m_lastLine.clear();
+        m_console->writeLn(message, type);
+        // Also ask the app to re-render
         if (m_app != nullptr) {
             m_app->RequestAnimationFrame();
         }
@@ -333,20 +247,17 @@ public:
             }
             return false;
         });
-        auto renderer = ftxui::Renderer(input, [&] {
-            return ftxui::vbox({
-                RenderConsole()
-                    | ftxui::vscroll_indicator
-                    | ftxui::focusPositionRelative(0.0f, 1.0f)
-                    | ftxui::yframe
-                    | ftxui::focus
-                    | ftxui::flex,
-                input->Render()
-            });
+        auto container = ftxui::Container::Vertical({});
+        container->Add(m_console);
+        container->Add(input);
+        container->SetActiveChild(input);
+        auto renderer = ftxui::Renderer(container, [&] {
+            return container->Render();
         });
         auto screen = ftxui::App::Fullscreen();
         m_app = &screen;
         m_quitClosure = screen.ExitLoopClosure();
+        LIBAPCLIENT_LOG("Starting AP client app");
         screen.Loop(renderer);
     }
 
