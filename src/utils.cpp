@@ -20,6 +20,11 @@
 #include <ShlObj_core.h>
 #include <Stringapiset.h>
 
+#elif defined(__APPLE__)
+
+// Include Apple-specific stubs
+#include "macos.h"
+
 #else
 
 #include <cstdlib>
@@ -47,22 +52,20 @@ std::filesystem::path getPlayerArchipelagoCacheDirectory() {
     CoTaskMemFree(localAppDataPath);
     // Now just append \Archipelago\Cache:
     result /= std::string("Archipelago\\Cache");
-    return result;
+#elif defined(__APPLE__)
+    // Grab the path from macOS
+    std::u16string cacheDir;
+    macos_get_cache_path(cacheDir);
+    std::filesystem::path result(cacheDir);
+    result /= "Archipelago";
 #else
     // Get it via the environment
     std::filesystem::path result{ std::getenv("HOME") };
-#  if defined(__APPLE__)
-    // For now, just always use ~/Library/Caches. There's a way to look it up
-    // via NSSearchPathForDirectoriesInDomains but that would involve bridging
-    // to Objective-C (probably) and that seems... unnecessary
-    result /= "Library/Caches/Archipelago";
-#  else
     // getenv will get an empty string if no HOME, and /.cache/Archipelago is
     // (probably) fine for that case
     result /= ".cache/Archipelago";
-#  endif
-    return result;
 #endif
+    return result;
 }
 
 /*! \brief Get the common.json path where the UUID is stored for the player.

@@ -22,7 +22,7 @@ namespace archipelago {
 #else
 
 // Don't log anything
-#define LIBAPCLIENT_LOG(...) do {} while ()
+#define LIBAPCLIENT_LOG(...) do {} while (false)
 
 #endif // LIBAPCLIENT_ENABLE_LOGGING
 

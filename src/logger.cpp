@@ -9,6 +9,8 @@
 #  define NOMINMAX
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
+#elif defined(__APPLE__)
+#  include "macos.h"
 #else
 #  include <iostream>
 #endif
@@ -21,6 +23,8 @@ void libapclient_log_message(const std::string& message) {
     OutputDebugStringA(message.c_str());
     // And add a newline
     OutputDebugStringA("\r\n");
+#elif defined(__APPLE__)
+    macos_log(message.c_str());
 #else
     std::cerr << message << std::endl;
 #endif
