@@ -462,7 +462,7 @@ public:
      * Empty if not required.
      * Not present if slot_data in Connect is false.
      */
-    std::unordered_map<std::string, std::string> slot_data{};
+    json slot_data{ nullptr };
 
     /*! \brief maps each slot to a NetworkSlot information.
      */

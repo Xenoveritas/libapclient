@@ -155,7 +155,7 @@ void from_json(const json& j, Connected& connected) {
     READ_FIELD(j, connected, missing_locations);
     READ_FIELD(j, connected, checked_locations);
     // Slot data can be entirely missing
-    READ_OPTIONAL_FIELD(j, connected, std::unordered_map<std::string COMMA std::string>, slot_data);
+    READ_OPTIONAL_FIELD(j, connected, json, slot_data);
     READ_FIELD(j, connected, slot_info);
     READ_FIELD(j, connected, hint_points);
 }
