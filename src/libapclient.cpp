@@ -256,9 +256,19 @@ void Client::sendGetDataPackage(const std::vector<std::string>& games) {
     sendPacket(packets::GetDataPackage(games));
 }
 
-//void sendGetDataPackage(packets::GetDataPackage& dataPackage);
 //void sendBounce(packets::Bounce& bounce);
-//void sendGet(packets::Get& get);
+
+void Client::sendGet(const std::string& key) {
+    sendPacket(packets::Get(key));
+}
+
+void Client::sendGet(const std::vector<std::string>& keys) {
+    sendPacket(packets::Get(keys));
+}
+
+void Client::sendSet(const std::string& key, const json& defaultValue, bool wantReply, const std::vector<packets::DataStorageOperation>& operations) {
+    sendPacket(packets::Set(key, defaultValue, wantReply, operations));
+}
 //void sendSet(packets::Set& set);
 //void sendSetNotify(packets::SetNotify& setNotify);
 

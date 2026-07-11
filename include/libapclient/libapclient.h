@@ -320,7 +320,14 @@ private:
     void disconnect_socket_run(std::promise<void> disconnect_promise);
 
 public:
+    /*! \brief Construct a new client, setting everything to default values.
+     */
     Client();
+    // Copy constructor is disallowed - this operation does not make sense.
+    // (What would a copy of a client be? Would an open socket be copied?)
+    Client(Client&) = delete;
+    // A move would make sense - copy the data over and then "move" the socket
+    // by taking ownership of the pointer
 
     /*! \brief Deconstructor.
      *
@@ -359,7 +366,7 @@ public:
     /*! \brief Connect to the server without a password.
      *
      * See
-     * connect(const std::string&, const std::string& playerName, const std::string*)
+     * connect(const std::string&, const std::string&, const std::string*)
      * for details.
      * \param serverUrl the URL for the server
      * \param playerName the name of the player
@@ -513,7 +520,7 @@ public:
      *
      * \param key the key to request from the server
      */
-    void sendGet(std::string& key);
+    void sendGet(const std::string& key);
 
     /*! \brief Request the server send a server-side value for a given key.
      *
@@ -522,10 +529,18 @@ public:
      * constructing a packets::Get directly and sending it via
      * sendPacket(const packets::Packet&).
      *
-     * \param key the key to request from the server
+     * \param keys the keys to request from the server
      */
-    void sendGet(std::vector<std::string>& key);
-    //void sendSet
+    void sendGet(const std::vector<std::string>& keys);
+
+    /*! \brief Sends a Set request to the server.
+     *
+     * \param key the key to set
+     * \param defaultValue the value to set it to if there is no existing value
+     * \param wantReply whether a reply is requested for the new value
+     * \param operations a list of operations to apply to the value
+     */
+    void sendSet(const std::string& key, const json& defaultValue, bool wantReply = false, const std::vector<packets::DataStorageOperation>& operations = std::vector<packets::DataStorageOperation>());
     //void sendSetNotify(packets::SetNotify& setNotify);
 
     /*! \brief Send a single packet.

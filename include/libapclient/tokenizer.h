@@ -48,12 +48,18 @@ template<class S = std::string, class CClassifier = CharClassifier<typename S::v
     enum tokenizer_state {
         // eat any whitespace.
         // on non-whitespace, transition to:
-        //   " -> double_quote_token
-        //   ' -> single_quote_token
+        //   classified as quote -> quoted_token
         //   anything else -> bare_token
         whitespace,
+        // in a bare token
+        //   whitespace -> store token and transition to whitespace
         bare_token,
+        // Inside a quoted string.
+        //    escape character -> store everything up to it, transition to quoted_escape
         quoted_token,
+        // Always add the character to the current token and then transition
+        // back to quoted_token
+        // (In the future this might handle things like \n or \000)
         quoted_escape
     };
     enum tokenizer_state state = whitespace;

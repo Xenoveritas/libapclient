@@ -196,6 +196,12 @@ public:
     void logError(const std::string& message) override {
         writeLn(message, MessageType::error);
     }
+    
+    /*! \brief Trapped to write "disconnected" to the console.
+     */
+    virtual void onWebSocketDisconnect() override {
+        writeLn("Disconnected.");
+    }
 
     /*! \brief override to forward a message from the client to
      * write(const std::string& message, MessageType type = MessageType::basic)
