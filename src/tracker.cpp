@@ -1,4 +1,5 @@
 #include "libapclient/tracker.h"
+#include "libapclient/data_package.h"
 #include "libapclient/logger.h"
 
 namespace archipelago {

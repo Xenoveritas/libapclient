@@ -195,6 +195,8 @@ void disconnect(SimpleClient& client, const std::vector<std::string>& arguments)
     }
     try {
         client.disconnect();
+        client.write("Disconnecting...", MessageType::basic);
+        // Could just wait on the future but there are no threading guarantees right now
     } catch (const InvalidStateError&) {
         client.writeLn("Cannot disconnect: already disconnected.", MessageType::error);
     }

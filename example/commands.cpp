@@ -69,4 +69,12 @@ void say(archipelago::SimpleClient& client, const std::vector<std::string>& args
     }
 }
 
+void get(archipelago::SimpleClient& client, const std::vector<std::string>& args) {
+    if (args.size() != 2) {
+        client.writeUsageHelp(args[0]);
+        return;
+    }
+    client.sendGet(args[1]);
+}
+
 }

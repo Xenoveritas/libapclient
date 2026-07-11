@@ -87,6 +87,7 @@ set(LIBAPCLIENT_SOURCES
 
 set(LIBAPCLIENT_HEADERS
     "include/libapclient/libapclient.h"
+    "include/libapclient/data_package.h"
     "include/libapclient/logger.h"
     "include/libapclient/packets.h"
     "include/libapclient/simple_client.h"

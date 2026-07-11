@@ -12,4 +12,6 @@ void cacheDir(archipelago::SimpleClient& client, const std::vector<std::string>&
 
 void say(archipelago::SimpleClient& client, const std::vector<std::string>& args);
 
+void get(archipelago::SimpleClient& client, const std::vector<std::string>& args);
+
 }

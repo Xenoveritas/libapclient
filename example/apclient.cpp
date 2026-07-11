@@ -7,6 +7,7 @@
 // Currently not part libapclient.h but may become part
 #include "libapclient/simple_client.h"
 #include "libapclient/tokenizer.h"
+#include "libapclient/data_package.h"
 #include "libapclient/tracker.h"
 #include "libapclient/logger.h"
 
@@ -52,6 +53,7 @@ public:
     APClient() : archipelago::SimpleClient(), m_console(new ConsoleComponent()), m_app(nullptr), m_locationTracker(), m_itemTracker() {
         // Add our commands
         addCommand("quit", commandQuit, "exits the client");
+        addAlias("exit", "quit");
         addCommand("received", commandReceived, "lists items that have been received");
         addCommand("missing", commandMissing, "lists locations that have not been checked");
         addCommand("items", commandListItems, "list all items in the current game");
@@ -61,6 +63,7 @@ public:
             .arguments = "<message>...",
             .detailedHelp = "Sends a given chat message. This may not function quite the same way as might be expected: the message will go through the general tokenizer before being sent. This means \"/say 'a message' will have the quotes removed when sent, and extra spaces (like \"/say  a  message\") will be removed (producing \"a message\")."
         });
+        addAlias("s", "say");
         addCommand("status", commandStatus, "shows current client status");
         addCommand("uuid", command::uuid, {
             .help = "display your client UUID",
@@ -68,11 +71,13 @@ public:
             .detailedHelp = "Display the cached Archipelago UUID if it exists.\nIf it does not exist and \"create\" is given, a new UUID will be generated."
         });
         addCommand("cachedir", command::cacheDir);
+        addCommand("get", command::get, "requests a value from the server");
     }
 
     virtual void createConnect(archipelago::packets::Connect& connect) override {
         // Take over this ourselves, mainly to do:
         connect.items_handling = archipelago::packets::ItemsHandling::all;
+        connect.slot_data = true;
         connect.tags.push_back(archipelago::tag::kTextOnly);
     }
 
