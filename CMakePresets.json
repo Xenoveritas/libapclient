@@ -18,6 +18,24 @@
             }
         },
         {
+            "name": "macos-base",
+            "hidden": true,
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "installDir": "${sourceDir}/out/install/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/usr/bin/clang",
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+                "CMAKE_BUILD_TYPE": "Debug"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
             "name": "x64-debug",
             "displayName": "x64 Debug",
             "inherits": "windows-base",
@@ -28,20 +46,20 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "$env{VSINSTALLDIR}Common7/IDE/CommonExtensions/Microsoft/CMake/cmake/Microsoft/SegmentHeap.cmake",
-              "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
-              "LIBAPCLIENT_BUILD_TESTS": "ON"
+                "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
+                "LIBAPCLIENT_BUILD_TESTS": "ON"
             }
         },
         {
             "name": "x64-release",
             "displayName": "x64 Release",
             "inherits": "x64-debug",
-          "cacheVariables": {
-            "CMAKE_BUILD_TYPE": "Release",
-            "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "$env{VSINSTALLDIR}Common7/IDE/CommonExtensions/Microsoft/CMake/cmake/Microsoft/SegmentHeap.cmake",
-            "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
-            "LIBAPCLIENT_BUILD_TESTS": "ON"
-          }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "$env{VSINSTALLDIR}Common7/IDE/CommonExtensions/Microsoft/CMake/cmake/Microsoft/SegmentHeap.cmake",
+                "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
+                "LIBAPCLIENT_BUILD_TESTS": "ON"
+            }
         },
         {
             "name": "x86-debug",
@@ -51,23 +69,35 @@
                 "value": "x86",
                 "strategy": "external"
             },
-          "cacheVariables": {
-            "CMAKE_BUILD_TYPE": "Debug",
-            "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "$env{VSINSTALLDIR}Common7/IDE/CommonExtensions/Microsoft/CMake/cmake/Microsoft/SegmentHeap.cmake",
-            "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
-            "LIBAPCLIENT_BUILD_TESTS": "ON"
-          }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "$env{VSINSTALLDIR}Common7/IDE/CommonExtensions/Microsoft/CMake/cmake/Microsoft/SegmentHeap.cmake",
+                "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
+                "LIBAPCLIENT_BUILD_TESTS": "ON"
+            }
         },
         {
             "name": "x86-release",
             "displayName": "x86 Release",
             "inherits": "x86-debug",
-          "cacheVariables": {
-            "CMAKE_BUILD_TYPE": "Release",
-            "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "$env{VSINSTALLDIR}Common7/IDE/CommonExtensions/Microsoft/CMake/cmake/Microsoft/SegmentHeap.cmake",
-            "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
-            "LIBAPCLIENT_BUILD_TESTS": "ON"
-          }
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "$env{VSINSTALLDIR}Common7/IDE/CommonExtensions/Microsoft/CMake/cmake/Microsoft/SegmentHeap.cmake",
+                "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
+                "LIBAPCLIENT_BUILD_TESTS": "ON"
+            }
+        },
+        {
+            "name": "macOS-debug",
+            "displayName": "macOS Debug",
+            "inherits": [
+                "macos-base"
+            ],
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "LIBAPCLIENT_BUILD_EXAMPLE": "ON",
+                "LIBAPCLIENT_BUILD_TESTS": "ON"
+            }
         }
     ]
 }
