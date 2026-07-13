@@ -9,6 +9,7 @@
  */
 
 #include "libapclient/packets.h"
+#include "libapclient/logger.h"
 
 namespace archipelago {
 namespace packets {
@@ -46,6 +47,32 @@ const NetworkPlayer* Connected::getPlayer(const std::string& name) const {
         }
     }
     return nullptr;
+}
+
+bool NetworkVersion::operator==(const NetworkVersion& other) const {
+    return major == other.major && minor == other.minor && build == other.build;
+}
+
+bool NetworkVersion::operator<(const NetworkVersion& other) const {
+    if (major < other.major) {
+        return true;
+    }
+    if (major > other.major) {
+        return false;
+    }
+    // Otherwise major == other.major so move to minor
+    if (minor < other.minor) {
+        return true;
+    }
+    if (minor > other.minor) {
+        return false;
+    }
+    // Otherwise minor == other.minor so move to build
+    // build == other.build means not less than so that's false
+    if (build >= other.build) {
+        return false;
+    }
+    return true;
 }
 
 // Conversion functions. The library-provided macros don't *quite* do the trick
@@ -106,7 +133,7 @@ void from_json(const json& j, Bounced& bounced) {
     READ_OPTIONAL_FIELD(j, bounced, std::vector<std::string>, games);
     READ_OPTIONAL_FIELD(j, bounced, std::vector<player_id_t>, slots);
     READ_OPTIONAL_FIELD(j, bounced, std::vector<std::string>, tags);
-    READ_FIELD(j, bounced, data);
+    READ_OPTIONAL_FIELD(j, bounced, json, data);
 }
 
 void Bounced::convert_to_json(json& j) const {
@@ -123,8 +150,18 @@ DEFER_TO_CLASS(Bounced);
 void from_json(const json& j, Connect& connect) {
     READ_FIELD(j, connect, name);
     // game and password are "optional" in that they're required but the value may sometimes be null.
-    j.at("game").get_to(*connect.game);
-    j.at("password").get_to(*connect.password);
+    auto game = j.at("game");
+    if (game.is_null()) {
+        connect.game = std::nullopt;
+    } else {
+        connect.game = game;
+    }
+    auto password = j.at("password");
+    if (password.is_null()) {
+        connect.password = std::nullopt;
+    } else {
+        connect.password = password;
+    }
     READ_FIELD(j, connect, uuid);
     READ_FIELD(j, connect, version);
     READ_FIELD(j, connect, items_handling);
@@ -175,6 +212,10 @@ void Connected::convert_to_json(json& j) const {
 
 DEFER_TO_CLASS(Connected);
 
+ConnectionRefused::ConnectionRefused(const json& jsonData) : Packet(kPacketConnectionRefused), errors() {
+    errors = jsonData.at("errors");
+}
+
 void from_json(const json& j, ConnectionRefused& connectionRefused) {
     READ_FIELD(j, connectionRefused, errors);
 }
@@ -188,15 +229,14 @@ void ConnectionRefused::convert_to_json(json& j) const {
 DEFER_TO_CLASS(ConnectionRefused);
 
 void from_json(const json& j, ConnectUpdate& connectUpdate) {
-    READ_FIELD(j, connectUpdate, items_handling);
-    READ_FIELD(j, connectUpdate, tags);
+    READ_OPTIONAL_FIELD(j, connectUpdate, ItemsHandling, items_handling);
+    READ_OPTIONAL_FIELD(j, connectUpdate, std::vector<std::string>, tags);
 }
 
 void ConnectUpdate::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(items_handling),
-        OBJ_WRITE_FIELD(tags)
-    };
+    j = json::object();
+    OBJ_ADD_FIELD_IF_EXISTS(j, items_handling);
+    OBJ_ADD_FIELD_IF_EXISTS(j, tags);
 }
 
 DEFER_TO_CLASS(ConnectUpdate);
@@ -351,13 +391,11 @@ void to_json(json& j, const DataStorageOperationType& dataStorageOperationType) 
 
 void from_json(const json& j, Get& get) {
     READ_FIELD(j, get, keys);
-    READ_FIELD(j, get, extra);
 }
 
 void Get::convert_to_json(json& j) const {
     j = {
-        OBJ_WRITE_FIELD(keys),
-        OBJ_WRITE_FIELD(extra)
+        OBJ_WRITE_FIELD(keys)
     };
 }
 
@@ -399,7 +437,7 @@ void from_json(const json& j, JSONMessagePart& jsonMessagePart) {
     READ_OPTIONAL_FIELD(j, jsonMessagePart, std::string, color);
     READ_OPTIONAL_FIELD(j, jsonMessagePart, int, flags);
     READ_OPTIONAL_FIELD(j, jsonMessagePart, player_id_t, player);
-    // TODO: READ_OPTIONAL_FIELD(j, jsonMessagePart, hint_status);
+    READ_OPTIONAL_FIELD(j, jsonMessagePart, HintStatus, hint_status);
 }
 
 void to_json(json& j, const JSONMessagePart& jsonMessagePart) {
@@ -409,6 +447,7 @@ void to_json(json& j, const JSONMessagePart& jsonMessagePart) {
     ADD_FIELD_IF_EXISTS(j, jsonMessagePart, color);
     ADD_FIELD_IF_EXISTS(j, jsonMessagePart, flags);
     ADD_FIELD_IF_EXISTS(j, jsonMessagePart, player);
+    ADD_FIELD_IF_EXISTS(j, jsonMessagePart, hint_status);
 }
 
 void from_json(const json& j, LocationChecks& locationChecks) {

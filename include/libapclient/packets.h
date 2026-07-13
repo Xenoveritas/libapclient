@@ -134,7 +134,7 @@ public:
      *
      * \param pCmd the `cmd` field for this packet
      */
-    Packet(std::string pCmd) : cmd(pCmd) {}
+    Packet(const std::string&& pCmd) : cmd(pCmd) {}
 
     /*! \brief The name of this packet.
      *
@@ -176,14 +176,30 @@ protected:
 };
 
 /// \brief An object representing software version.
-class NetworkVersion {
-public:
+struct NetworkVersion {
     NetworkVersion(const NetworkVersion& other) : major(other.major), minor(other.minor), build(other.build) {}
     NetworkVersion(int pMajor, int pMinor, int pBuild): major(pMajor), minor(pMinor), build(pBuild) {}
     NetworkVersion() : major(0), minor(0), build(0) {}
     int major;
     int minor;
     int build;
+    bool operator==(const NetworkVersion& other) const;
+    bool operator<(const NetworkVersion& other) const;
+    /*! \brief Converts the version to a version string
+     *
+     * Converts to "{major}.{minor}.{build}", so:
+     * 
+     * ```cpp
+     * static_cast<string>(NetworkVersion(0, 6, 7))
+     * ```
+     * 
+     * Becomes the string `"0.6.7"`.
+     * 
+     * \return the version string
+     */
+    operator std::string() const {
+        return std::format("{}.{}.{}", major, minor, build);
+    }
 };
 
 /*! \brief The possible client states that may be sent to the server in
@@ -236,28 +252,27 @@ enum class NetworkItemFlag {
 
 /*! \brief The basic metadata for an Archipelago item.
  */
-class NetworkItem {
-public:
+struct NetworkItem {
     /// \brief the item id of the item.
-    item_id_t item;
+    item_id_t item{ 0 };
     /// \brief the location id of the item inside the world.
-    location_id_t location;
+    location_id_t location{ 0 };
     /*! \brief the player slot of the world the item is located in, except when
      * inside a LocationInfo Packet then it will be the slot of the player to
      * receive the item
      */
-    player_id_t player;
-    int flags;
-    bool isProgression() { return flags & (int)NetworkItemFlag::progression; }
-    bool isUseful() { return flags & (int)NetworkItemFlag::useful; }
-    bool isTrap() { return flags & (int)NetworkItemFlag::trap; }
-    NetworkItem() : item(0), location(0), player(0), flags(0) {}
+    player_id_t player{ 0 };
+    int flags{ 0 };
+    NetworkItem() {}
     NetworkItem(item_id_t item,
         location_id_t location,
         player_id_t player,
         int flags
     ) : item(item), location(location), player(player), flags(flags) {}
     NetworkItem(const NetworkItem&) = default;
+    bool isProgression() { return flags & (int)NetworkItemFlag::progression; }
+    bool isUseful() { return flags & (int)NetworkItemFlag::useful; }
+    bool isTrap() { return flags & (int)NetworkItemFlag::trap; }
 };
 
 /// \brief The type of slot in a game.
@@ -272,8 +287,7 @@ enum SlotType {
 
 /*! \brief Information about a slot.
  */
-class NetworkSlot {
-public:
+struct NetworkSlot {
     /// \brief the name for that slot
     std::string name{};
     /// \brief the game being played in that slot
@@ -283,12 +297,12 @@ public:
     /// \brief group members(?)
     std::vector<player_id_t> group_members{};
     NetworkSlot() {}
+    NetworkSlot(const NetworkSlot&) = default;
 };
 
 /*! \brief Information about a player connected to the server.
  */
-class NetworkPlayer {
-public:
+struct NetworkPlayer {
     team_id_t team;
     team_slot_id_t slot;
     std::string alias;
@@ -314,6 +328,13 @@ public:
      */
     std::vector<std::string> errors;
     ConnectionRefused() : Packet(kPacketConnectionRefused), errors() {}
+    ConnectionRefused(const ConnectionRefused&) = default;
+    // The existance of constructors that take a list of strings breaks the
+    // template magic that allows casting from a JSON object to this type.
+    // Provide an explicit constructor to work for the default.
+    ConnectionRefused(const json& jsonData);
+    ConnectionRefused(const std::vector<std::string>&& errors) : Packet(kPacketConnectionRefused), errors(errors) {}
+    ConnectionRefused(std::initializer_list<std::string> errors) : Packet(kPacketConnectionRefused), errors(errors) {}
 
     /*! \brief Searches the list to see if the given error is in it.
      *
@@ -462,7 +483,7 @@ public:
      * Empty if not required.
      * Not present if slot_data in Connect is false.
      */
-    json slot_data{ nullptr };
+    json slot_data;
 
     /*! \brief maps each slot to a NetworkSlot information.
      */
@@ -473,7 +494,7 @@ public:
     // TODO: Could be unsigned?
     int hint_points{ 0 };
 
-    Connected() : Packet(kPacketConnected) {}
+    Connected() : Packet(kPacketConnected), slot_data(), slot_info() {}
     virtual void convert_to_json(json& j) const override;
 
     /*! \brief Look up a player's information based on their name.
@@ -693,7 +714,7 @@ public:
     /// \brief Client Tags this message is targeting
     std::optional<std::vector<std::string>> tags;
     /// \brief The actual data sent
-    json data;
+    std::optional<json> data;
     Bounced() : Packet(kPacketBounced) {}
     virtual void convert_to_json(json& j) const override;
 };
@@ -822,7 +843,7 @@ public:
     /*! \brief Flags indicating the items the client wants sent via
      * ReceivedItem packets.
      */
-    ItemsHandling items_handling;
+    ItemsHandling items_handling{ ItemsHandling::none };
 
     /*! \brief Client tags.
      *
@@ -838,15 +859,16 @@ public:
     Connect(const std::string& game) : Packet(kPacketConnect), password(), game(game), name(), uuid(), items_handling(ItemsHandling::otherWorlds), tags(), slot_data(false) {}
 };
 
-/*! \brief Update arguments from the Connect package, currently only updating
- * tags and items_handling is supported by Archipelago.
+/*! \brief Update arguments from the Connect package.
+ *
+ * Currently only updating tags and items_handling is supported by Archipelago.
  */
 class ConnectUpdate : public Packet {
 public:
     /// \brief Flags configuring which items should be sent by the server.
-    ItemsHandling items_handling;
+    std::optional<ItemsHandling> items_handling{};
     /// \brief Denotes special features or capabilities that the sender is capable of.
-    std::vector<std::string> tags;
+    std::optional<std::vector<std::string>> tags{};
     ConnectUpdate() : Packet(kPacketConnectUpdate) {}
     virtual void convert_to_json(json& json) const override;
 };
@@ -880,11 +902,11 @@ public:
 class LocationScouts : public Packet {
 public:
     /// \brief The ids of the locations seen by the client.
-    std::vector<location_id_t> locations;
+    std::vector<location_id_t> locations{};
     /*! \brief If non-zero, the scouted locations get created and broadcasted as
      * a player-visible hint.
      */
-    int create_as_hint;
+    int create_as_hint{ 0 };
     LocationScouts() : Packet(kPacketLocationScouts) {}
     virtual void convert_to_json(json& json) const override;
 };
@@ -921,7 +943,7 @@ public:
     /// \brief the new hint status
     std::optional<HintStatus> status;
 
-    UpdateHint() : Packet(kPacketUpdateHint) {}
+    UpdateHint() : Packet(kPacketUpdateHint), player(0), location(0), status(std::nullopt) {}
     virtual void convert_to_json(json& json) const override;
 };
 
@@ -933,6 +955,7 @@ public:
 class StatusUpdate : public Packet {
 public:
     StatusUpdate() : Packet(kPacketStatusUpdate), status(ClientStatus::unknown) {}
+    StatusUpdate(const StatusUpdate&) = default;
     StatusUpdate(ClientStatus pStatus) : Packet(kPacketStatusUpdate), status(pStatus) {}
     ClientStatus status;
     virtual void convert_to_json(json& json) const override;
@@ -1022,13 +1045,14 @@ class DeathLink {
  *
  * See the Set package for how to write values to the data storage. A Get packet
  * will be answered with a Retrieved packet.
+ * 
+ * Archipelago allows extra JSON fields to be included in the Get packet that will
+ * then be returned in the associated Retrieved packet.
  */
 class Get : public Packet {
 public:
     /// \brief Keys to retrieve the values for.
     std::vector<std::string> keys;
-    /// \brief JSON object containing fields past keys to send.
-    json extra{};
     Get() : Packet(kPacketGet), keys() {}
     Get(const std::string& key) : Packet(kPacketGet), keys({ key }) {}
     Get(const std::vector<std::string>& keys) : Packet(kPacketGet), keys(keys) {}
@@ -1078,12 +1102,11 @@ enum class DataStorageOperationType {
 
 /*! \brief describes how to set data
  */
-class DataStorageOperation {
-public:
+struct DataStorageOperation {
     /// \brief the operation to perform
-    DataStorageOperationType operation;
+    DataStorageOperationType operation{ DataStorageOperationType::opDefault };
     /// \brief the new JSON value
-    json value;
+    json value{};
 };
 
 /*! \brief Used to write data to the server's data storage.
@@ -1209,8 +1232,6 @@ void from_json(const json& j, StatusUpdate& statusUpdate);
 void to_json(json& j, const StatusUpdate& statusUpdate);
 void from_json(const json& j, Sync& sync);
 void to_json(json& j, const Sync& sync);
-void from_json(const json& j, SlotInfo& slotInfo);
-void to_json(json& j, const SlotInfo& slotInfo);
 void from_json(const json& j, UpdateHint& updateHint);
 void to_json(json& j, const UpdateHint& updateHint);
 /// \endcond

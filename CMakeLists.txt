@@ -24,6 +24,7 @@ project ("libapclient"
 
 option(LIBAPCLIENT_SHARED "Compile libapclient as a shared library." OFF)
 option(LIBAPCLIENT_BUILD_EXAMPLE "Build the example Archipelago client program." OFF)
+option(LIBAPCLIENT_BUILD_TESTS "Build tests." OFF)
 # TLS will be required before this is usable. This is currently set to off to avoid having to configure that.
 option(LIBAPCLIENT_USE_TLS "Whether to enable TLS." OFF)
 
@@ -130,10 +131,12 @@ if (APPLE)
     target_sources(libapclient PRIVATE "src/macos.mm" "src/macos.h")
 endif()
 
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET libapclient PROPERTY CXX_STANDARD 20)
+set_property(TARGET libapclient PROPERTY CXX_STANDARD 20)
+
+if (LIBAPCLIENT_BUILD_EXAMPLE)
+    add_subdirectory(example)
 endif()
 
-if (${LIBAPCLIENT_BUILD_EXAMPLE})
-    add_subdirectory(example)
+if (LIBAPCLIENT_BUILD_TESTS)
+    add_subdirectory(test)
 endif()
