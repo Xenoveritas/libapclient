@@ -110,13 +110,13 @@ struct DataPackageKeyHash {
 };
 
 /*! \brief A helper class for storing and updating data packages.
- * 
+ *
  * Conceptually a data packages should not change between games or runs and is
  * static per APWorld version.
  *
  * The exact contents of a data package are up to the individual APWorld and
  * may contain additional information.
- * 
+ *
  * The default template parameters will just drop any additional data and
  * simply take the defaults.
  *
@@ -138,17 +138,23 @@ public:
      */
     DataPackageCache() : dataPackages(), checksums(), deserializer() {}
 
+    /*! \brief Gets the number of data packages cached.
+     */
+    size_t size() {
+        return dataPackages.size();
+    }
+
     void checkRoomInfo(const packets::RoomInfo& roomInfo) {
         // Check to make sure our checksums match the existing ones
-        for (auto dpChecksum : roomInfo.datapackage_checksums) {
+        for (auto& dpChecksum : roomInfo.datapackage_checksums) {
             // See if this exists
-            auto iter = checksums.find(dpChecksum->first);
+            auto iter = checksums.find(dpChecksum.first);
             if (iter == checksums.end()) {
                 // Not found. Insert a new empty pair
-                checksums.insert({ dpChecksum->first, std::string() });
-            } else if (dpChecksum->second != *iter) {
+                checksums.insert({ dpChecksum.first, std::string() });
+            } else if (dpChecksum.second != *iter) {
                 // Checksum does not match. Blank out our game data.
-                dataPackages.erase(dpChecksum->first);
+                dataPackages.erase(dpChecksum.first);
             }
         }
     }
@@ -163,7 +169,7 @@ public:
 
     /*! \brief Gets a list of missing games. These are games where a checksum
      * exists, but no data does.
-     * 
+     *
      * If the RoomInfo indicated a checksum mismatch, the game will have the
      * game data removed and will be included in this list.
      */
@@ -179,6 +185,20 @@ public:
                 result.push_back(pair.first);
             }
         }
+        return result;
+    }
+
+    /*! \brief Gets the list of all known games.
+     *
+     * This is the list of games which have checksums stored for them.
+     */
+    const std::vector<std::string> getGames() const {
+        std::vector<std::string> result;
+        result.reserve(checksums.size());
+        for (auto& pair : checksums) {
+            result.push_back(pair.first);
+        }
+        return result;
     }
 
     /*! \brief Update game data with the given JSON data.

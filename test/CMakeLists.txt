@@ -14,6 +14,7 @@ endif()
 enable_testing()
 
 set (TEST_SOURCES
+    "TestDataPackage.cpp"
     "TestPackets.cpp"
 )
 
