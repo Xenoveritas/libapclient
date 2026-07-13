@@ -113,9 +113,25 @@ public:
 };
 
 /*! \brief Indicates the state of the client.
+ *
+ * These are ordered such that the following is true:
+ *
+ * - clientState <= disconnecting - not connected
+ * - clientState >= connecting && clientState < connected - a connection exists
+ *   but the initial handshake is incomplete
+ * - clientState >= connected - the client is fully connected to the server and
+ *   game information can be sent and received
  */
 enum class ClientState {
-    /*! \brief The client isn't connected at all (the initial state)
+    /*! \brief The client was never connected (the initial state).
+     *
+     * This is the state of a freshly created client. It indicates that not only
+     * is there no current connection, there never was one, meaning that there
+     * is no valid URL or player slot name available.
+     */
+    neverConnected,
+
+    /*! \brief The client isn't connected
      */
     disconnected,
 
@@ -178,13 +194,6 @@ enum class ClientState {
      */
     sentConnect,
 
-    /*! \brief The handshake has been completed and the connection is now in a
-     * state where gameplay messages can be sent and received.
-     *
-     * The majority of packets should only be sent in this state.
-     */
-    connected,
-
     /*! \brief The server rejected the client's connection request.
      *
      * In this state the connection is still "live" and may potentially be
@@ -194,7 +203,14 @@ enum class ClientState {
      * In theory the client may still send packets::GetDataPackage along with a
      * corrected packets::Connect while in this state.
      */
-    connectionRefused
+    connectionRefused,
+
+    /*! \brief The handshake has been completed and the connection is now in a
+     * state where gameplay messages can be sent and received.
+     *
+     * The majority of packets should only be sent in this state.
+     */
+    connected
 };
 
 /*! \brief Exception raised when an attempt is made to do something while the
@@ -309,7 +325,7 @@ protected:
 private:
     /*! \brief Current client state.
      */
-    ClientState m_state{ ClientState::disconnected };
+    ClientState m_state{ ClientState::neverConnected };
 
     /*! \brief Internal function used to close the socket in another thread.
      *

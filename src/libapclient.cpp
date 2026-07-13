@@ -72,7 +72,7 @@ Client::~Client() {
 void Client::connect(const std::string& serverUrl, const std::string& playerName, const std::string* password) {
     // Grab the lock for this
     std::lock_guard lock(m_mutex);
-    if (m_state != ClientState::disconnected || m_socket != nullptr) {
+    if (m_state > ClientState::disconnected || m_socket != nullptr) {
         throw InvalidStateError("client is already connected");
     }
     // Create the socket

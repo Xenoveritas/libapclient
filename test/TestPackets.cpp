@@ -20,9 +20,9 @@ TEST(Packets, parseBounce) {
 
 TEST(Packets, encodeBounce) {
     archipelago::packets::Bounce b;
-    b.games = std::vector<std::string>({ "super test", "super test ultra deluxe edition" });
-    b.slots = std::vector<archipelago::player_id_t>({ 42, 67 });
-    b.tags = std::vector<std::string>({ "example" });
+    b.games = { "super test", "super test ultra deluxe edition" };
+    b.slots = { 42, 67 };
+    b.tags = { "example" };
     std::string jsonStr = static_cast<json>(b).dump();
     EXPECT_EQ(jsonStr, "{\"cmd\":\"Bounce\",\"games\":[\"super test\",\"super test ultra deluxe edition\"],\"slots\":[42,67],\"tags\":[\"example\"]}");
 }
@@ -253,62 +253,101 @@ TEST(Packets, encodeJSONMessagePart) {
     EXPECT_EQ(jsonStr, "{\"color\":\"color\",\"flags\":2,\"hint_status\":10,\"player\":1,\"text\":\"This is some text\",\"type\":\"type\"}");
 }
 TEST(Packets, parseLocationChecks) {
-    json j = json::parse("{\"cmd\":\"LocationChecks\"}");
+    json j = json::parse("{\"cmd\":\"LocationChecks\",\"locations\":[1,2,3,5,7]}");
     auto packet = static_cast<archipelago::packets::LocationChecks>(j);
+    EXPECT_THAT(packet.locations, testing::ElementsAre(1, 2, 3, 5, 7));
 }
 TEST(Packets, encodeLocationChecks) {
-    archipelago::packets::LocationChecks c;
-    std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"LocationChecks\"}");
+    archipelago::packets::LocationChecks checks;
+    checks.locations = { 1, 3, 5 };
+    std::string jsonStr = static_cast<json>(checks).dump();
+    EXPECT_EQ(jsonStr, "{\"cmd\":\"LocationChecks\",\"locations\":[1,3,5]}");
 }
 TEST(Packets, parseLocationInfo) {
-    json j = json::parse("{\"cmd\":\"LocationInfo\"}");
+    // The bulk of this is in NetworkItem
+    json j = json::parse("{\"cmd\":\"LocationInfo\",\"locations\":[]}");
     auto packet = static_cast<archipelago::packets::LocationInfo>(j);
+    EXPECT_THAT(packet.locations, testing::IsEmpty());
 }
 TEST(Packets, encodeLocationInfo) {
-    archipelago::packets::LocationInfo c;
-    std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"LocationInfo\"}");
+    archipelago::packets::LocationInfo locationInfo;
+    locationInfo.locations = { archipelago::packets::NetworkItem() };
+    std::string jsonStr = static_cast<json>(locationInfo).dump();
+    EXPECT_EQ(jsonStr, "{\"cmd\":\"LocationInfo\",\"locations\":[{\"class\":\"NetworkItem\",\"flags\":0,\"item\":0,\"location\":0,\"player\":0}]}");
 }
 TEST(Packets, parseLocationScouts) {
-    json j = json::parse("{\"cmd\":\"LocationScouts\"}");
+    json j = json::parse("{\"cmd\":\"LocationScouts\",\"locations\":[101,102],\"create_as_hint\":0}");
     auto packet = static_cast<archipelago::packets::LocationScouts>(j);
+    EXPECT_THAT(packet.locations, testing::ElementsAre(101, 102));
+    EXPECT_EQ(packet.create_as_hint, 0);
 }
 TEST(Packets, encodeLocationScouts) {
-    archipelago::packets::LocationScouts c;
-    std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"LocationScouts\"}");
+    archipelago::packets::LocationScouts scouts;
+    scouts.locations = { 100 };
+    scouts.create_as_hint = 1;
+    std::string jsonStr = static_cast<json>(scouts).dump();
+    EXPECT_EQ(jsonStr, "{\"cmd\":\"LocationScouts\",\"create_as_hint\":1,\"locations\":[100]}");
 }
 TEST(Packets, parseNetworkItem) {
-    json j = json::parse("{\"cmd\":\"NetworkItem\"}");
+    json j = json::parse("{\"flags\":0,\"item\":12,\"location\":45,\"player\":3}");
     auto packet = static_cast<archipelago::packets::NetworkItem>(j);
+    EXPECT_EQ(packet.flags, 0);
+    EXPECT_EQ(packet.item, 12);
+    EXPECT_EQ(packet.location, 45);
+    EXPECT_EQ(packet.player, 3);
 }
 TEST(Packets, encodeNetworkItem) {
-    archipelago::packets::NetworkItem c;
-    std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"NetworkItem\"}");
+    archipelago::packets::NetworkItem networkItem = {
+        .item = 6,
+        .location = 7,
+        .player = 8,
+        .flags = 1
+    };
+    std::string jsonStr = static_cast<json>(networkItem).dump();
+    EXPECT_EQ(jsonStr, "{\"class\":\"NetworkItem\",\"flags\":1,\"item\":6,\"location\":7,\"player\":8}");
 }
 TEST(Packets, parseNetworkPlayer) {
-    json j = json::parse("{\"cmd\":\"NetworkPlayer\"}");
+    json j = json::parse("{\"team\":1,\"slot\":2,\"alias\":\"Alias\",\"name\":\"Slot\"}");
     auto packet = static_cast<archipelago::packets::NetworkPlayer>(j);
+    EXPECT_EQ(packet.alias, "Alias");
+    EXPECT_EQ(packet.name, "Slot");
+    EXPECT_EQ(packet.team, 1);
+    EXPECT_EQ(packet.slot, 2);
 }
 TEST(Packets, encodeNetworkPlayer) {
-    archipelago::packets::NetworkPlayer c;
-    std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"NetworkPlayer\"}");
+    archipelago::packets::NetworkPlayer player = {
+        .team = 1,
+        .slot = 3,
+        .alias = "Alias",
+        .name = "Name"
+    };
+    std::string jsonStr = static_cast<json>(player).dump();
+    EXPECT_EQ(jsonStr, "{\"alias\":\"Alias\",\"class\":\"NetworkPlayer\",\"name\":\"Name\",\"slot\":3,\"team\":1}");
 }
 TEST(Packets, parseNetworkSlot) {
-    json j = json::parse("{\"cmd\":\"NetworkSlot\"}");
+    json j = json::parse("{\"class\":\"NetworkSlot\",\"name\":\"Player\",\"game\":\"GoogleTest\",\"type\":1,\"group_members\":[]}");
     auto packet = static_cast<archipelago::packets::NetworkSlot>(j);
+    EXPECT_EQ(packet.name, "Player");
+    EXPECT_EQ(packet.game, "GoogleTest");
+    EXPECT_EQ(packet.type, 1);
+    EXPECT_THAT(packet.group_members, testing::IsEmpty());
 }
 TEST(Packets, encodeNetworkSlot) {
-    archipelago::packets::NetworkSlot c;
-    std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"NetworkSlot\"}");
+    archipelago::packets::NetworkSlot slot = {
+        .name = "Name",
+        .game = "GoogleTest",
+        .type = archipelago::packets::SlotType::player,
+        .group_members = {}
+    };
+    std::string jsonStr = static_cast<json>(slot).dump();
+    EXPECT_EQ(jsonStr, "{\"class\":\"NetworkSlot\",\"game\":\"GoogleTest\",\"group_members\":[],\"name\":\"Name\",\"type\":1}");
 }
 TEST(Packets, parseNetworkVersion) {
-    json j = json::parse("{\"cmd\":\"NetworkVersion\"}");
+    json j = json::parse("{\"class\":\"Version\",\"major\":1,\"minor\":0,\"build\":2}");
     auto packet = static_cast<archipelago::packets::NetworkVersion>(j);
+    EXPECT_EQ(packet.major, 1);
+    EXPECT_EQ(packet.minor, 0);
+    EXPECT_EQ(packet.build, 2);
 }
 TEST(Packets, encodeNetworkVersion) {
     archipelago::packets::NetworkVersion v(0, 6, 7);
@@ -322,49 +361,69 @@ TEST(Packets, compareNetworkVersion) {
     EXPECT_TRUE(archipelago::packets::NetworkVersion(0, 6, 7) == archipelago::packets::NetworkVersion(0, 6, 7));
 }
 TEST(Packets, parsePrintJSON) {
-    json j = json::parse("{\"cmd\":\"PrintJSON\"}");
+    json j = json::parse("{\"cmd\":\"PrintJSON\",\"data\":[]}");
     auto packet = static_cast<archipelago::packets::PrintJSON>(j);
+    EXPECT_THAT(packet.data, testing::IsEmpty());
+    EXPECT_EQ(packet.type, archipelago::packets::PrintJsonType::none);
+    EXPECT_EQ(packet.receiving, std::nullopt);
+    EXPECT_EQ(packet.item, std::nullopt);
+    EXPECT_EQ(packet.found, std::nullopt);
+    EXPECT_EQ(packet.team, std::nullopt);
+    EXPECT_EQ(packet.slot, std::nullopt);
+    EXPECT_EQ(packet.message, std::nullopt);
+    EXPECT_EQ(packet.tags, std::nullopt);
+    EXPECT_EQ(packet.countdown, std::nullopt);
+    // TODO: Actually test more of that
 }
 TEST(Packets, encodePrintJSON) {
     archipelago::packets::PrintJSON c;
     std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"PrintJSON\"}");
+    EXPECT_EQ(jsonStr, "{\"cmd\":\"PrintJSON\",\"data\":[]}");
+    // TODO: Actually test more of that
 }
 TEST(Packets, parsePrintJsonType) {
-    json j = json::parse("{\"cmd\":\"PrintJsonType\"}");
-    auto packet = static_cast<archipelago::packets::PrintJsonType>(j);
+    json j = json::parse("\"Something That Doesn't Exist\"");
+    auto type = static_cast<archipelago::packets::PrintJsonType>(j);
+    EXPECT_EQ(type, archipelago::packets::PrintJsonType::unknown);
+    j = json::parse("\"Chat\"");
+    type = static_cast<archipelago::packets::PrintJsonType>(j);
+    EXPECT_EQ(type, archipelago::packets::PrintJsonType::Chat);
 }
 TEST(Packets, encodePrintJsonType) {
-    archipelago::packets::PrintJsonType c;
-    std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"PrintJsonType\"}");
+    archipelago::packets::PrintJsonType type;
+    std::string jsonStr = static_cast<json>(archipelago::packets::PrintJsonType::Chat).dump();
+    EXPECT_EQ(jsonStr, "\"Chat\"");
 }
 TEST(Packets, parseReceivedItems) {
-    json j = json::parse("{\"cmd\":\"ReceivedItems\"}");
+    json j = json::parse("{\"cmd\":\"ReceivedItems\",\"index\":0,\"items\":[]}");
     auto packet = static_cast<archipelago::packets::ReceivedItems>(j);
+    EXPECT_EQ(packet.index, 0);
+    EXPECT_THAT(packet.items, testing::IsEmpty());
 }
 TEST(Packets, encodeReceivedItems) {
-    archipelago::packets::ReceivedItems c;
-    std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"ReceivedItems\"}");
+    archipelago::packets::ReceivedItems items;
+    items.index = 1;
+    items.items = { archipelago::packets::NetworkItem({.item = 1, .location = 12, .player = 2, .flags = 0}) };
+    std::string jsonStr = static_cast<json>(items).dump();
+    EXPECT_EQ(jsonStr, "{\"cmd\":\"ReceivedItems\",\"index\":1,\"items\":[{\"class\":\"NetworkItem\",\"flags\":0,\"item\":1,\"location\":12,\"player\":2}]}");
 }
 TEST(Packets, parseRetrieved) {
-    json j = json::parse("{\"cmd\":\"Retrieved\"}");
+    json j = json::parse("{\"cmd\":\"Retrieved\",\"keys\":{\"unknown\":\"this is probably wrong\"}}");
     auto packet = static_cast<archipelago::packets::Retrieved>(j);
 }
 TEST(Packets, encodeRetrieved) {
     archipelago::packets::Retrieved c;
     std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"Retrieved\"}");
+    EXPECT_EQ(jsonStr, "{\"cmd\":\"Retrieved\",\"keys\":{}}");
 }
 TEST(Packets, parseRoomInfo) {
-    json j = json::parse("{\"cmd\":\"RoomInfo\"}");
+    json j = json::parse("{\"cmd\":\"RoomInfo\",\"datapackage_checksums\":{},\"games\":[],\"generator_version\":{\"build\":0,\"class\":\"Version\",\"major\":0,\"minor\":0},\"hint_cost\":0,\"location_check_points\":0,\"password\":false,\"permissions\":{},\"seed_name\":\"\",\"tags\":[],\"time\":0.0,\"version\":{\"build\":0,\"class\":\"Version\",\"major\":0,\"minor\":0}}");
     auto packet = static_cast<archipelago::packets::RoomInfo>(j);
 }
 TEST(Packets, encodeRoomInfo) {
     archipelago::packets::RoomInfo c;
     std::string jsonStr = static_cast<json>(c).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"RoomInfo\"}");
+    EXPECT_EQ(jsonStr, "{\"cmd\":\"RoomInfo\",\"datapackage_checksums\":{},\"games\":[],\"generator_version\":{\"build\":0,\"class\":\"Version\",\"major\":0,\"minor\":0},\"hint_cost\":0,\"location_check_points\":0,\"password\":false,\"permissions\":{},\"seed_name\":\"\",\"tags\":[],\"time\":0.0,\"version\":{\"build\":0,\"class\":\"Version\",\"major\":0,\"minor\":0}}");
 }
 TEST(Packets, parseRoomUpdate) {
     json j = json::parse("{\"cmd\":\"RoomUpdate\"}");

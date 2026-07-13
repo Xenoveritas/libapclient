@@ -188,13 +188,13 @@ struct NetworkVersion {
     /*! \brief Converts the version to a version string
      *
      * Converts to "{major}.{minor}.{build}", so:
-     * 
+     *
      * ```cpp
      * static_cast<string>(NetworkVersion(0, 6, 7))
      * ```
-     * 
+     *
      * Becomes the string `"0.6.7"`.
-     * 
+     *
      * \return the version string
      */
     operator std::string() const {
@@ -263,13 +263,6 @@ struct NetworkItem {
      */
     player_id_t player{ 0 };
     int flags{ 0 };
-    NetworkItem() {}
-    NetworkItem(item_id_t item,
-        location_id_t location,
-        player_id_t player,
-        int flags
-    ) : item(item), location(location), player(player), flags(flags) {}
-    NetworkItem(const NetworkItem&) = default;
     bool isProgression() { return flags & (int)NetworkItemFlag::progression; }
     bool isUseful() { return flags & (int)NetworkItemFlag::useful; }
     bool isTrap() { return flags & (int)NetworkItemFlag::trap; }
@@ -296,8 +289,6 @@ struct NetworkSlot {
     SlotType type{ SlotType::player };
     /// \brief group members(?)
     std::vector<player_id_t> group_members{};
-    NetworkSlot() {}
-    NetworkSlot(const NetworkSlot&) = default;
 };
 
 /*! \brief Information about a player connected to the server.
@@ -307,8 +298,6 @@ struct NetworkPlayer {
     team_slot_id_t slot;
     std::string alias;
     std::string name;
-    NetworkPlayer() : team(0), slot(0), alias(), name() {}
-    NetworkPlayer(team_id_t team, team_slot_id_t slot, const std::string& alias, const std::string name) : team(team), slot(slot), alias(alias), name(name) {}
 };
 
 //
@@ -1045,7 +1034,7 @@ class DeathLink {
  *
  * See the Set package for how to write values to the data storage. A Get packet
  * will be answered with a Retrieved packet.
- * 
+ *
  * Archipelago allows extra JSON fields to be included in the Get packet that will
  * then be returned in the associated Retrieved packet.
  */

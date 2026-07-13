@@ -137,12 +137,10 @@ void from_json(const json& j, Bounced& bounced) {
 }
 
 void Bounced::convert_to_json(json& j) const {
-    j = {
-        OBJ_ADD_FIELD(j, data)
-    };
     OBJ_ADD_FIELD_IF_EXISTS(j, games);
     OBJ_ADD_FIELD_IF_EXISTS(j, slots);
     OBJ_ADD_FIELD_IF_EXISTS(j, tags);
+    OBJ_ADD_FIELD_IF_EXISTS(j, data);
 }
 
 DEFER_TO_CLASS(Bounced);
