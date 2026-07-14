@@ -38,6 +38,7 @@
 
 #include <list>
 #include <string>
+#include <map>
 #include <unordered_map>
 #include <optional>
 
@@ -378,7 +379,9 @@ public:
  */
 class SlotInfo {
 public:
-    std::unordered_map<player_id_t, NetworkSlot> slot_info{};
+    /*! \brief The map of player ID to slot info.
+     */
+    std::map<player_id_t, NetworkSlot> slot_info{};
 
     const NetworkSlot* getNetworkSlotByName(const std::string& name) const;
 };
@@ -784,7 +787,7 @@ public:
     std::optional<json> original_value{ std::nullopt };
     /// \brief The slot that originally sent the Set package causing this change.
     team_slot_id_t slot{ 0 };
-    SetReply() : Packet(kPacketSetReply), value{ nullptr } {}
+    SetReply() : Packet(kPacketSetReply), value(nullptr) {}
     virtual void convert_to_json(json& j) const override;
 };
 
@@ -1116,7 +1119,7 @@ public:
      * The actual field in the JSON object is `"default"` but as `default` is
      * a keyword, the field name needed to be something else.
      */
-    json default_value{ nullptr };
+    json default_value{};
     /// \brief If true, the server will send a SetReply response back to the client.
     bool want_reply{ false };
     /// \brief Operations to apply to the value, multiple operations can be present and they will be executed in order of appearance.
