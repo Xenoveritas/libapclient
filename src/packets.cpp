@@ -83,206 +83,200 @@ bool NetworkVersion::operator<(const NetworkVersion& other) const {
 /// \cond
 // Macro expansion is ... anyway, this allows std::map<foo COMMA bar> in type fields
 #define COMMA ,
-#define READ_FIELD(json_object, object, field) json_object.at(#field).get_to(object.field)
-#define READ_OPTIONAL_FIELD(json_object, object, type, field) { \
-    auto _iter = json_object.find(#field); \
-    if (_iter != json_object.end()) { \
-        type _v = *_iter; \
-        object.field = _v; \
-    } \
-}
-#define READ_FIELD_IF_EXISTS(json_object, object, field, blank) { \
-    auto _iter = json_object.find(#field); \
-    if (_iter == json_object.end()) { \
-        object.field = blank; \
+
+
+#define FROM_JSON(NAME) void from_json(const json& _jsonObject, NAME& _packetStruct)
+#define READ_FIELD(FIELD) _jsonObject.at(#FIELD).get_to(_packetStruct.FIELD)
+#define READ_NULLABLE_OPTIONAL_FIELD(FIELD) { auto _v = _jsonObject.at(#FIELD); \
+    if (_v.is_null()) { \
+        _packetStruct.FIELD = std::nullopt; \
     } else { \
-        object.field = (*_iter); \
+        _packetStruct.FIELD = _v; \
+    } \
+}
+#define READ_OPTIONAL_FIELD(TYPE, FIELD) { \
+    auto _iter = _jsonObject.find(#FIELD); \
+    if (_iter != _jsonObject.end()) { \
+        TYPE _v = *_iter; \
+        _packetStruct.FIELD = _v; \
+    } \
+}
+#define READ_FIELD_IF_EXISTS(FIELD, BLANK_VALUE) { \
+    auto _iter = _jsonObject.find(#FIELD); \
+    if (_iter == _jsonObject.end()) { \
+        _packetStruct.FIELD = BLANK_VALUE; \
+    } else { \
+        _packetStruct.FIELD = (*_iter); \
     } \
 }
 
-#define WRITE_FIELD(object, field) { #field, object.field }
-#define ADD_FIELD(json_object, object, field) json_object[#field] = object.field
-#define ADD_FIELD_IF_EXISTS(json_object, object, field) if (object.field.has_value()) { json_object[#field] = (*object.field); }
 
-#define OBJ_WRITE_FIELD(field) { #field, field }
-#define OBJ_ADD_FIELD(json_object, field) json_object[#field] = field
-#define OBJ_ADD_FIELD_IF_EXISTS(json_object, field) if (field.has_value()) { json_object[#field] = (*field); }
+#define TO_JSON(NAME)              void to_json(json& _jsonObject, const NAME& _packetStruct)
+#define OBJECT                     _jsonObject = json
+#define PACKET(NAME)               { "cmd", kPacket##NAME }
+#define PYTHON_CLASS(KLS)          { "class", KLS }
+#define WRITE_FIELD(field)         { #field, _packetStruct.field }
+#define ADD_FIELD(field)           _jsonObject[#field] = _packetStruct.field
+#define ADD_FIELD_IF_EXISTS(field) if (_packetStruct.field.has_value()) { _jsonObject[#field] = (*_packetStruct.field); }
 
-#define DEFER_TO_CLASS(cls) void to_json(json& j, const cls& obj) { obj.to_json(j); }
 
 // CONVERSION FUNCTIONS
 //
 // These are alphabetized to keep the order somewhat understandable.
-void from_json(const json& j, Bounce& bounce) {
-    READ_OPTIONAL_FIELD(j, bounce, std::vector<std::string>, games);
-    READ_OPTIONAL_FIELD(j, bounce, std::vector<player_id_t>, slots);
-    READ_OPTIONAL_FIELD(j, bounce, std::vector<std::string>, tags);
-    READ_OPTIONAL_FIELD(j, bounce, json, data);
+FROM_JSON(Bounce) {
+    READ_OPTIONAL_FIELD(std::vector<std::string>, games);
+    READ_OPTIONAL_FIELD(std::vector<player_id_t>, slots);
+    READ_OPTIONAL_FIELD(std::vector<std::string>, tags);
+    READ_OPTIONAL_FIELD(json, data);
 }
 
-void Bounce::convert_to_json(json& j) const {
-    OBJ_ADD_FIELD_IF_EXISTS(j, games);
-    OBJ_ADD_FIELD_IF_EXISTS(j, slots);
-    OBJ_ADD_FIELD_IF_EXISTS(j, tags);
-    OBJ_ADD_FIELD_IF_EXISTS(j, data);
+TO_JSON(Bounce) {
+    OBJECT{
+        PACKET(Bounce)
+    };
+    ADD_FIELD_IF_EXISTS(games);
+    ADD_FIELD_IF_EXISTS(slots);
+    ADD_FIELD_IF_EXISTS(tags);
+    ADD_FIELD_IF_EXISTS(data);
 }
 
-DEFER_TO_CLASS(Bounce);
-
-void from_json(const json& j, Bounced& bounced) {
-    READ_OPTIONAL_FIELD(j, bounced, std::vector<std::string>, games);
-    READ_OPTIONAL_FIELD(j, bounced, std::vector<player_id_t>, slots);
-    READ_OPTIONAL_FIELD(j, bounced, std::vector<std::string>, tags);
-    READ_OPTIONAL_FIELD(j, bounced, json, data);
+FROM_JSON(Bounced) {
+    READ_OPTIONAL_FIELD(std::vector<std::string>, games);
+    READ_OPTIONAL_FIELD(std::vector<player_id_t>, slots);
+    READ_OPTIONAL_FIELD(std::vector<std::string>, tags);
+    READ_OPTIONAL_FIELD(json, data);
 }
 
-void Bounced::convert_to_json(json& j) const {
-    OBJ_ADD_FIELD_IF_EXISTS(j, games);
-    OBJ_ADD_FIELD_IF_EXISTS(j, slots);
-    OBJ_ADD_FIELD_IF_EXISTS(j, tags);
-    OBJ_ADD_FIELD_IF_EXISTS(j, data);
+TO_JSON(Bounced) {
+    OBJECT{
+        PACKET(Bounced)
+    };
+    ADD_FIELD_IF_EXISTS(games);
+    ADD_FIELD_IF_EXISTS(slots);
+    ADD_FIELD_IF_EXISTS(tags);
+    ADD_FIELD_IF_EXISTS(data);
 }
 
-DEFER_TO_CLASS(Bounced);
-
-void from_json(const json& j, Connect& connect) {
-    READ_FIELD(j, connect, name);
+FROM_JSON(Connect) {
+    READ_FIELD(name);
     // game and password are "optional" in that they're required but the value may sometimes be null.
-    auto game = j.at("game");
-    if (game.is_null()) {
-        connect.game = std::nullopt;
-    } else {
-        connect.game = game;
-    }
-    auto password = j.at("password");
-    if (password.is_null()) {
-        connect.password = std::nullopt;
-    } else {
-        connect.password = password;
-    }
-    READ_FIELD(j, connect, uuid);
-    READ_FIELD(j, connect, version);
-    READ_FIELD(j, connect, items_handling);
-    READ_FIELD(j, connect, tags);
-    READ_FIELD(j, connect, slot_data);
+    READ_NULLABLE_OPTIONAL_FIELD(game);
+    READ_NULLABLE_OPTIONAL_FIELD(password);
+    READ_FIELD(uuid);
+    READ_FIELD(version);
+    READ_FIELD(items_handling);
+    READ_FIELD(tags);
+    READ_FIELD(slot_data);
 }
 
-void Connect::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(name),
+TO_JSON(Connect) {
+    OBJECT{
+        PACKET(Connect),
+        WRITE_FIELD(name),
         // game and password are "optional" in that they're required but the value may sometimes be null.
-        OBJ_WRITE_FIELD(game),
-        OBJ_WRITE_FIELD(password),
-        OBJ_WRITE_FIELD(uuid),
-        OBJ_WRITE_FIELD(version),
-        OBJ_WRITE_FIELD(items_handling),
-        OBJ_WRITE_FIELD(tags),
-        OBJ_WRITE_FIELD(slot_data)
+        WRITE_FIELD(game),
+        WRITE_FIELD(password),
+        WRITE_FIELD(uuid),
+        WRITE_FIELD(version),
+        WRITE_FIELD(items_handling),
+        WRITE_FIELD(tags),
+        WRITE_FIELD(slot_data)
     };
 }
 
-DEFER_TO_CLASS(Connect);
-
-void from_json(const json& j, Connected& connected) {
-    READ_FIELD(j, connected, team);
-    READ_FIELD(j, connected, slot);
-    READ_FIELD(j, connected, players);
-    READ_FIELD(j, connected, missing_locations);
-    READ_FIELD(j, connected, checked_locations);
+FROM_JSON(Connected) {
+    READ_FIELD(team);
+    READ_FIELD(slot);
+    READ_FIELD(players);
+    READ_FIELD(missing_locations);
+    READ_FIELD(checked_locations);
     // Slot data can be entirely missing
-    READ_OPTIONAL_FIELD(j, connected, json, slot_data);
-    READ_FIELD(j, connected, slot_info);
-    READ_FIELD(j, connected, hint_points);
+    READ_OPTIONAL_FIELD(json, slot_data);
+    READ_FIELD(slot_info);
+    READ_FIELD(hint_points);
 }
 
-void Connected::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(team),
-        OBJ_WRITE_FIELD(slot),
-        OBJ_WRITE_FIELD(players),
-        OBJ_WRITE_FIELD(missing_locations),
-        OBJ_WRITE_FIELD(checked_locations),
-        OBJ_WRITE_FIELD(slot_data),
-        OBJ_WRITE_FIELD(slot_info),
-        OBJ_WRITE_FIELD(hint_points)
+TO_JSON(Connected) {
+    OBJECT{
+        PACKET(Connected),
+        WRITE_FIELD(team),
+        WRITE_FIELD(slot),
+        WRITE_FIELD(players),
+        WRITE_FIELD(missing_locations),
+        WRITE_FIELD(checked_locations),
+        WRITE_FIELD(slot_data),
+        WRITE_FIELD(slot_info),
+        WRITE_FIELD(hint_points)
     };
 }
 
-DEFER_TO_CLASS(Connected);
-
-ConnectionRefused::ConnectionRefused(const json& jsonData) : Packet(kPacketConnectionRefused), errors() {
-    errors = jsonData.at("errors");
+FROM_JSON(ConnectionRefused) {
+    READ_FIELD(errors);
 }
 
-void from_json(const json& j, ConnectionRefused& connectionRefused) {
-    READ_FIELD(j, connectionRefused, errors);
-}
-
-void ConnectionRefused::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(errors)
+TO_JSON(ConnectionRefused) {
+    OBJECT{
+        PACKET(ConnectionRefused),
+        WRITE_FIELD(errors)
     };
 }
 
-DEFER_TO_CLASS(ConnectionRefused);
-
-void from_json(const json& j, ConnectUpdate& connectUpdate) {
-    READ_OPTIONAL_FIELD(j, connectUpdate, ItemsHandling, items_handling);
-    READ_OPTIONAL_FIELD(j, connectUpdate, std::vector<std::string>, tags);
+FROM_JSON(ConnectUpdate) {
+    READ_OPTIONAL_FIELD(ItemsHandling, items_handling);
+    READ_OPTIONAL_FIELD(std::vector<std::string>, tags);
 }
 
-void ConnectUpdate::convert_to_json(json& j) const {
-    j = json::object();
-    OBJ_ADD_FIELD_IF_EXISTS(j, items_handling);
-    OBJ_ADD_FIELD_IF_EXISTS(j, tags);
-}
-
-DEFER_TO_CLASS(ConnectUpdate);
-
-void from_json(const json& j, CreateHints& createHints) {
-    READ_FIELD(j, createHints, locations);
-    READ_FIELD(j, createHints, player);
-    READ_OPTIONAL_FIELD(j, createHints, HintStatus, status);
-}
-
-void CreateHints::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(locations),
-        OBJ_WRITE_FIELD(player)
+TO_JSON(ConnectUpdate) {
+    OBJECT{
+        PACKET(ConnectUpdate)
     };
-    OBJ_ADD_FIELD_IF_EXISTS(j, status);
+    ADD_FIELD_IF_EXISTS(items_handling);
+    ADD_FIELD_IF_EXISTS(tags);
 }
 
-DEFER_TO_CLASS(CreateHints);
+FROM_JSON(CreateHints) {
+    READ_FIELD(locations);
+    READ_FIELD(player);
+    READ_OPTIONAL_FIELD(HintStatus, status);
+}
 
-void from_json(const json& j, DataPackage& dataPackage) {
+TO_JSON(CreateHints) {
+    OBJECT{
+        PACKET(CreateHints),
+        WRITE_FIELD(locations),
+        WRITE_FIELD(player)
+    };
+    ADD_FIELD_IF_EXISTS(status);
+}
+
+FROM_JSON(DataPackage) {
     // This is something like { "data": { "games": (actual JSON) } }
     // Rather than mirror the single-key-object, just extract the games part
-    j.at("data").at("games").get_to(dataPackage.games);
+    _jsonObject.at("data").at("games").get_to(_packetStruct.games);
 }
 
-void DataPackage::convert_to_json(json& j) const {
-    j = json{
+TO_JSON(DataPackage) {
+    OBJECT{
+        PACKET(DataPackage),
         { "data", {
-            { "games", games }
+            WRITE_FIELD(games)
         } }
     };
 }
 
-DEFER_TO_CLASS(DataPackage);
-
-void from_json(const json& j, DataStorageOperation& dataStorageOperation) {
-    READ_FIELD(j, dataStorageOperation, operation);
-    READ_FIELD(j, dataStorageOperation, value);
+FROM_JSON(DataStorageOperation) {
+    READ_FIELD(operation);
+    READ_FIELD(value);
 }
 
-void to_json(json& j, const DataStorageOperation& dataStorageOperation) {
-    j = {
-        WRITE_FIELD(dataStorageOperation, operation),
-        WRITE_FIELD(dataStorageOperation, value)
+TO_JSON(DataStorageOperation) {
+    OBJECT{
+        WRITE_FIELD(operation),
+        WRITE_FIELD(value)
     };
 }
 
+// Don't bother with the macros for this one, it's converting from a string to an enumerated type
 void from_json(const json& j, DataStorageOperationType& dataStorageOperationType) {
     // Operation is actually a string
     const std::string& jsonType = static_cast<const std::string&>(j);
@@ -325,6 +319,7 @@ void from_json(const json& j, DataStorageOperationType& dataStorageOperationType
     }
 }
 
+// See above
 void to_json(json& j, const DataStorageOperationType& dataStorageOperationType) {
     switch (dataStorageOperationType) {
     case DataStorageOperationType::opReplace:
@@ -387,204 +382,197 @@ void to_json(json& j, const DataStorageOperationType& dataStorageOperationType) 
     }
 }
 
-void from_json(const json& j, Get& get) {
-    READ_FIELD(j, get, keys);
+FROM_JSON(Get) {
+    READ_FIELD(keys);
 }
 
-void Get::convert_to_json(json& j) const {
-    j = {
-        OBJ_WRITE_FIELD(keys)
+TO_JSON(Get) {
+    OBJECT{
+        PACKET(Get),
+        WRITE_FIELD(keys)
     };
 }
 
-DEFER_TO_CLASS(Get);
-
-void from_json(const json& j, GetDataPackage& getDataPackage) {
-    READ_OPTIONAL_FIELD(j, getDataPackage, std::vector<std::string>, games);
+FROM_JSON(GetDataPackage) {
+    READ_OPTIONAL_FIELD(std::vector<std::string>, games);
 }
 
-void GetDataPackage::convert_to_json(json& j) const {
-    // This really could be an (almost) empty object
-    j = json::object();
+TO_JSON(GetDataPackage) {
+    OBJECT{
+        PACKET(GetDataPackage)
+    };
     // Only add the games field if one was provided, otherwise, leave it out
-    OBJ_ADD_FIELD_IF_EXISTS(j, games);
+    ADD_FIELD_IF_EXISTS(games);
 }
 
-DEFER_TO_CLASS(GetDataPackage);
-
-void from_json(const json& j, InvalidPacket& invalidPacket) {
-    READ_FIELD(j, invalidPacket, type);
-    READ_OPTIONAL_FIELD(j, invalidPacket, std::string, original_cmd);
-    READ_FIELD(j, invalidPacket, text);
+FROM_JSON(InvalidPacket) {
+    READ_FIELD(type);
+    READ_NULLABLE_OPTIONAL_FIELD(original_cmd);
+    READ_FIELD(text);
 }
 
-void InvalidPacket::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(type),
-        OBJ_WRITE_FIELD(text)
+TO_JSON(InvalidPacket) {
+    OBJECT{
+        PACKET(InvalidPacket),
+        WRITE_FIELD(type),
+        WRITE_FIELD(text),
+        WRITE_FIELD(original_cmd)
     };
-    OBJ_ADD_FIELD_IF_EXISTS(j, original_cmd);
 }
 
-DEFER_TO_CLASS(InvalidPacket);
-
-void from_json(const json& j, JSONMessagePart& jsonMessagePart) {
+FROM_JSON(JSONMessagePart) {
     // Everything in this object is optional
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, std::string, type);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, std::string, text);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, std::string, color);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, int, flags);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, player_id_t, player);
-    READ_OPTIONAL_FIELD(j, jsonMessagePart, HintStatus, hint_status);
+    READ_OPTIONAL_FIELD(std::string, type);
+    READ_OPTIONAL_FIELD(std::string, text);
+    READ_OPTIONAL_FIELD(std::string, color);
+    READ_OPTIONAL_FIELD(int, flags);
+    READ_OPTIONAL_FIELD(player_id_t, player);
+    READ_OPTIONAL_FIELD(HintStatus, hint_status);
 }
 
-void to_json(json& j, const JSONMessagePart& jsonMessagePart) {
-    j = json::object();
-    ADD_FIELD_IF_EXISTS(j, jsonMessagePart, type);
-    ADD_FIELD_IF_EXISTS(j, jsonMessagePart, text);
-    ADD_FIELD_IF_EXISTS(j, jsonMessagePart, color);
-    ADD_FIELD_IF_EXISTS(j, jsonMessagePart, flags);
-    ADD_FIELD_IF_EXISTS(j, jsonMessagePart, player);
-    ADD_FIELD_IF_EXISTS(j, jsonMessagePart, hint_status);
+TO_JSON(JSONMessagePart) {
+    OBJECT{};
+    ADD_FIELD_IF_EXISTS(type);
+    ADD_FIELD_IF_EXISTS(text);
+    ADD_FIELD_IF_EXISTS(color);
+    ADD_FIELD_IF_EXISTS(flags);
+    ADD_FIELD_IF_EXISTS(player);
+    ADD_FIELD_IF_EXISTS(hint_status);
 }
 
-void from_json(const json& j, LocationChecks& locationChecks) {
-    READ_FIELD(j, locationChecks, locations);
+FROM_JSON(LocationChecks) {
+    READ_FIELD(locations);
 }
 
-void LocationChecks::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(locations)
+TO_JSON(LocationChecks) {
+    OBJECT{
+        PACKET(LocationChecks),
+        WRITE_FIELD(locations)
     };
 }
 
-DEFER_TO_CLASS(LocationChecks);
-
-void from_json(const json& j, LocationInfo& locationInfo) {
-    READ_FIELD(j, locationInfo, locations);
+FROM_JSON(LocationInfo) {
+    READ_FIELD(locations);
 }
 
-void LocationInfo::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(locations)
+TO_JSON(LocationInfo) {
+    OBJECT{
+        PACKET(LocationInfo),
+        WRITE_FIELD(locations)
     };
 }
 
-DEFER_TO_CLASS(LocationInfo);
-
-void from_json(const json& j, LocationScouts& locationScouts) {
-    READ_FIELD(j, locationScouts, locations);
-    READ_FIELD(j, locationScouts, create_as_hint);
+FROM_JSON(LocationScouts) {
+    READ_FIELD(locations);
+    READ_FIELD(create_as_hint);
 }
 
-void LocationScouts::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(locations),
-        OBJ_WRITE_FIELD(create_as_hint)
+TO_JSON(LocationScouts) {
+    OBJECT{
+        PACKET(LocationScouts),
+        WRITE_FIELD(locations),
+        WRITE_FIELD(create_as_hint)
     };
 }
 
-DEFER_TO_CLASS(LocationScouts);
-
-void from_json(const json& j, NetworkItem& item) {
-    READ_FIELD(j, item, item);
-    READ_FIELD(j, item, location);
-    READ_FIELD(j, item, player);
-    READ_FIELD(j, item, flags);
+FROM_JSON(NetworkItem) {
+    READ_FIELD(item);
+    READ_FIELD(location);
+    READ_FIELD(player);
+    READ_FIELD(flags);
 }
 
-void to_json(json& j, const NetworkItem& item) {
-    j = json{
+TO_JSON(NetworkItem) {
+    OBJECT{
         // class is required for Python
-        { "class", "NetworkItem" },
-        WRITE_FIELD(item, item),
-        WRITE_FIELD(item, location),
-        WRITE_FIELD(item, player),
-        WRITE_FIELD(item, flags)
+        PYTHON_CLASS("NetworkItem"),
+        WRITE_FIELD(item),
+        WRITE_FIELD(location),
+        WRITE_FIELD(player),
+        WRITE_FIELD(flags)
     };
 }
 
-void from_json(const json& j, NetworkPlayer& player) {
-    READ_FIELD(j, player, team);
-    READ_FIELD(j, player, slot);
-    READ_FIELD(j, player, alias);
-    READ_FIELD(j, player, name);
+FROM_JSON(NetworkPlayer) {
+    READ_FIELD(team);
+    READ_FIELD(slot);
+    READ_FIELD(alias);
+    READ_FIELD(name);
 }
 
-void to_json(json& j, const NetworkPlayer& player) {
-    j = json{
+TO_JSON(NetworkPlayer) {
+    OBJECT{
         // class is required for Python
-        { "class", "NetworkPlayer" },
-        { "team", player.team },
-        { "slot", player.slot },
-        { "alias", player.alias },
-        { "name", player.name }
+        PYTHON_CLASS("NetworkPlayer"),
+        WRITE_FIELD(team),
+        WRITE_FIELD(slot),
+        WRITE_FIELD(alias),
+        WRITE_FIELD(name)
     };
 }
 
-void from_json(const json& j, NetworkSlot& slot) {
-    j.at("name").get_to(slot.name);
-    j.at("game").get_to(slot.game);
-    j.at("type").get_to(slot.type);
-    j.at("group_members").get_to(slot.group_members);
+FROM_JSON(NetworkSlot) {
+    READ_FIELD(name);
+    READ_FIELD(game);
+    READ_FIELD(type);
+    READ_FIELD(group_members);
 }
 
-void to_json(json& j, const NetworkSlot& slot) {
-    j = json{
+TO_JSON(NetworkSlot) {
+    OBJECT{
         // class is required for Python
-        { "class", "NetworkSlot" },
-        { "name", slot.name },
-        { "game", slot.game },
-        { "type", slot.type },
-        { "group_members", slot.group_members }
+        PYTHON_CLASS("NetworkSlot"),
+        WRITE_FIELD(name),
+        WRITE_FIELD(game),
+        WRITE_FIELD(type),
+        WRITE_FIELD(group_members)
     };
 }
 
-void from_json(const json& j, NetworkVersion& version) {
-    READ_FIELD(j, version, major);
-    READ_FIELD(j, version, minor);
-    READ_FIELD(j, version, build);
+FROM_JSON(NetworkVersion) {
+    READ_FIELD(major);
+    READ_FIELD(minor);
+    READ_FIELD(build);
 }
 
-void to_json(json& j, const NetworkVersion& version) {
-    j = json{
+TO_JSON(NetworkVersion) {
+    OBJECT{
         // class is required for Python
-        { "class", "Version" },
-        WRITE_FIELD(version, major),
-        WRITE_FIELD(version, minor),
-        WRITE_FIELD(version, build)
+        PYTHON_CLASS("Version"),
+        WRITE_FIELD(major),
+        WRITE_FIELD(minor),
+        WRITE_FIELD(build)
     };
 }
 
-void from_json(const json& j, PrintJSON& printJSON) {
-    READ_FIELD(j, printJSON, data);
-    READ_FIELD_IF_EXISTS(j, printJSON, type, PrintJsonType::none);
-    READ_OPTIONAL_FIELD(j, printJSON, player_id_t, receiving);
-    READ_OPTIONAL_FIELD(j, printJSON, NetworkItem, item);
-    READ_OPTIONAL_FIELD(j, printJSON, bool, found);
-    READ_OPTIONAL_FIELD(j, printJSON, team_id_t, team);
-    READ_OPTIONAL_FIELD(j, printJSON, team_slot_id_t, slot);
-    READ_OPTIONAL_FIELD(j, printJSON, std::string, message);
-    READ_OPTIONAL_FIELD(j, printJSON, std::vector<std::string>, tags);
-    READ_OPTIONAL_FIELD(j, printJSON, int, countdown);
+FROM_JSON(PrintJSON) {
+    READ_FIELD(data);
+    READ_FIELD_IF_EXISTS(type, PrintJsonType::none);
+    READ_OPTIONAL_FIELD(player_id_t, receiving);
+    READ_OPTIONAL_FIELD(NetworkItem, item);
+    READ_OPTIONAL_FIELD(bool, found);
+    READ_OPTIONAL_FIELD(team_id_t, team);
+    READ_OPTIONAL_FIELD(team_slot_id_t, slot);
+    READ_OPTIONAL_FIELD(std::string, message);
+    READ_OPTIONAL_FIELD(std::vector<std::string>, tags);
+    READ_OPTIONAL_FIELD(int, countdown);
 }
 
-DEFER_TO_CLASS(PrintJSON);
-
-void PrintJSON::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(data)
+TO_JSON(PrintJSON) {
+    OBJECT{
+        PACKET(PrintJSON),
+        WRITE_FIELD(data)
     };
     // We handle type in a weird way
-    if (type != PrintJsonType::none && type != PrintJsonType::unknown) {
-        OBJ_ADD_FIELD(j, type);
+    if (_packetStruct.type != PrintJsonType::none && _packetStruct.type != PrintJsonType::unknown) {
+        ADD_FIELD(type);
     }
-    OBJ_ADD_FIELD_IF_EXISTS(j, receiving);
-    OBJ_ADD_FIELD_IF_EXISTS(j, item);
-    OBJ_ADD_FIELD_IF_EXISTS(j, found);
-    OBJ_ADD_FIELD_IF_EXISTS(j, team);
-    OBJ_ADD_FIELD_IF_EXISTS(j, slot);
-    OBJ_ADD_FIELD_IF_EXISTS(j, message);
+    ADD_FIELD_IF_EXISTS(receiving);
+    ADD_FIELD_IF_EXISTS(item);
+    ADD_FIELD_IF_EXISTS(found);
+    ADD_FIELD_IF_EXISTS(team);
+    ADD_FIELD_IF_EXISTS(slot);
+    ADD_FIELD_IF_EXISTS(message);
 }
 
 void from_json(const json& j, PrintJsonType& printJsonType) {
@@ -684,141 +672,135 @@ void to_json(json& j, const PrintJsonType& printJsonType) {
     }
 }
 
-void from_json(const json& j, ReceivedItems& receivedItems) {
-    READ_FIELD(j, receivedItems, index);
-    READ_FIELD(j, receivedItems, items);
+FROM_JSON(ReceivedItems) {
+    READ_FIELD(index);
+    READ_FIELD(items);
 }
 
-void ReceivedItems::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(index),
-        OBJ_WRITE_FIELD(items)
+TO_JSON(ReceivedItems) {
+    OBJECT{
+        PACKET(ReceivedItems),
+        WRITE_FIELD(index),
+        WRITE_FIELD(items)
     };
 }
 
-DEFER_TO_CLASS(ReceivedItems);
-
-void from_json(const json& j, Retrieved& retrieved) {
-    READ_FIELD(j, retrieved, keys);
+FROM_JSON(Retrieved) {
+    READ_FIELD(keys);
 }
 
-void Retrieved::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(keys)
+TO_JSON(Retrieved) {
+    OBJECT{
+        PACKET(Retrieved),
+        WRITE_FIELD(keys)
     };
 }
 
-DEFER_TO_CLASS(Retrieved);
-
-void from_json(const json& j, RoomInfo& roomInfo) {
-    READ_FIELD(j, roomInfo, version);
-    READ_FIELD(j, roomInfo, generator_version);
-    READ_FIELD(j, roomInfo, tags);
-    READ_FIELD(j, roomInfo, password);
-    READ_FIELD(j, roomInfo, permissions);
-    READ_FIELD(j, roomInfo, hint_cost);
-    READ_FIELD(j, roomInfo, location_check_points);
-    READ_FIELD(j, roomInfo, games);
-    READ_FIELD(j, roomInfo, datapackage_checksums);
-    READ_FIELD(j, roomInfo, seed_name);
-    READ_FIELD(j, roomInfo, time);
+FROM_JSON(RoomInfo) {
+    READ_FIELD(version);
+    READ_FIELD(generator_version);
+    READ_FIELD(tags);
+    READ_FIELD(password);
+    READ_FIELD(permissions);
+    READ_FIELD(hint_cost);
+    READ_FIELD(location_check_points);
+    READ_FIELD(games);
+    READ_FIELD(datapackage_checksums);
+    READ_FIELD(seed_name);
+    READ_FIELD(time);
 }
 
-void RoomInfo::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(version),
-        OBJ_WRITE_FIELD(generator_version),
-        OBJ_WRITE_FIELD(tags),
-        OBJ_WRITE_FIELD(password),
-        OBJ_WRITE_FIELD(permissions),
-        OBJ_WRITE_FIELD(hint_cost),
-        OBJ_WRITE_FIELD(location_check_points),
-        OBJ_WRITE_FIELD(games),
-        OBJ_WRITE_FIELD(datapackage_checksums),
-        OBJ_WRITE_FIELD(seed_name),
-        OBJ_WRITE_FIELD(time)
+TO_JSON(RoomInfo) {
+    OBJECT{
+        PACKET(RoomInfo),
+        WRITE_FIELD(version),
+        WRITE_FIELD(generator_version),
+        WRITE_FIELD(tags),
+        WRITE_FIELD(password),
+        WRITE_FIELD(permissions),
+        WRITE_FIELD(hint_cost),
+        WRITE_FIELD(location_check_points),
+        WRITE_FIELD(games),
+        WRITE_FIELD(datapackage_checksums),
+        WRITE_FIELD(seed_name),
+        WRITE_FIELD(time)
     };
 }
 
-DEFER_TO_CLASS(RoomInfo);
-
-void from_json(const json& j, RoomUpdate& roomUpdate) {
-    READ_OPTIONAL_FIELD(j, roomUpdate, int, hint_points);
-    READ_OPTIONAL_FIELD(j, roomUpdate, int, location_check_points);
-    READ_OPTIONAL_FIELD(j, roomUpdate, std::vector<NetworkPlayer>, players);
-    READ_OPTIONAL_FIELD(j, roomUpdate, std::vector<location_id_t>, checked_locations);
-    READ_OPTIONAL_FIELD(j, roomUpdate, std::unordered_map<std::string COMMA Permission>, permissions);
+FROM_JSON(RoomUpdate) {
+    READ_OPTIONAL_FIELD(int, hint_points);
+    READ_OPTIONAL_FIELD(int, location_check_points);
+    READ_OPTIONAL_FIELD(std::vector<NetworkPlayer>, players);
+    READ_OPTIONAL_FIELD(std::vector<location_id_t>, checked_locations);
+    READ_OPTIONAL_FIELD(std::map<std::string COMMA Permission>, permissions);
 }
 
-void RoomUpdate::convert_to_json(json& j) const {
-    OBJ_ADD_FIELD_IF_EXISTS(j, hint_points);
-    OBJ_ADD_FIELD_IF_EXISTS(j, location_check_points);
-    OBJ_ADD_FIELD_IF_EXISTS(j, players);
-    OBJ_ADD_FIELD_IF_EXISTS(j, checked_locations);
-    OBJ_ADD_FIELD_IF_EXISTS(j, permissions);
+TO_JSON(RoomUpdate) {
+    OBJECT{
+        PACKET(RoomUpdate)
+    };
+    ADD_FIELD_IF_EXISTS(hint_points);
+    ADD_FIELD_IF_EXISTS(location_check_points);
+    ADD_FIELD_IF_EXISTS(players);
+    ADD_FIELD_IF_EXISTS(checked_locations);
+    ADD_FIELD_IF_EXISTS(permissions);
 }
 
-DEFER_TO_CLASS(RoomUpdate);
-
-void from_json(const json& j, Say& say) {
-    READ_FIELD(j, say, text);
+FROM_JSON(Say) {
+    READ_FIELD(text);
 }
 
-void Say::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(text)
+TO_JSON(Say) {
+    OBJECT{
+        PACKET(Say),
+        WRITE_FIELD(text)
     };
 }
 
-DEFER_TO_CLASS(Say);
-
-void from_json(const json& j, Set& set) {
-    READ_FIELD(j, set, key);
-    j.at("default").get_to(set.default_value);
-    READ_FIELD(j, set, want_reply);
-    READ_FIELD(j, set, operations);
+FROM_JSON(Set) {
+    READ_FIELD(key);
+    _jsonObject.at("default").get_to(_packetStruct.default_value);
+    READ_FIELD(want_reply);
+    READ_FIELD(operations);
 }
 
-void Set::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(key),
-        { "default", default_value },
-        OBJ_WRITE_FIELD(want_reply),
-        OBJ_WRITE_FIELD(operations)
+TO_JSON(Set) {
+    OBJECT{
+        PACKET(Set),
+        WRITE_FIELD(key),
+        { "default", _packetStruct.default_value },
+        WRITE_FIELD(want_reply),
+        WRITE_FIELD(operations)
     };
 }
 
-DEFER_TO_CLASS(Set);
-
-void from_json(const json& j, SetNotify& setNotify) {
-    READ_FIELD(j, setNotify, keys);
+FROM_JSON(SetNotify) {
+    READ_FIELD(keys);
 }
 
-void SetNotify::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(keys)
+TO_JSON(SetNotify) {
+    OBJECT{
+        PACKET(SetNotify),
+        WRITE_FIELD(keys)
     };
 }
 
-DEFER_TO_CLASS(SetNotify);
-
-void from_json(const json& j, SetReply& setReply) {
-    READ_FIELD(j, setReply, key);
-    READ_FIELD(j, setReply, value);
-    READ_OPTIONAL_FIELD(j, setReply, json, original_value);
-    READ_FIELD(j, setReply, slot);
+FROM_JSON(SetReply) {
+    READ_FIELD(key);
+    READ_FIELD(value);
+    READ_OPTIONAL_FIELD(json, original_value);
+    READ_FIELD(slot);
 }
 
-void SetReply::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(key),
-        OBJ_WRITE_FIELD(value),
-        OBJ_WRITE_FIELD(slot)
+TO_JSON(SetReply) {
+    OBJECT{
+        PACKET(SetReply),
+        WRITE_FIELD(key),
+        WRITE_FIELD(value),
+        WRITE_FIELD(slot)
     };
-    OBJ_ADD_FIELD_IF_EXISTS(j, original_value);
+    ADD_FIELD_IF_EXISTS(original_value);
 }
-
-DEFER_TO_CLASS(SetReply);
 
 void to_json(json& j, const SlotInfo& slotInfo) {
     // Start with a blank object.
@@ -836,43 +818,40 @@ void from_json(const json& j, SlotInfo& slotInfo) {
     }
 }
 
-void from_json(const json& j, StatusUpdate& statusUpdate) {
-    READ_FIELD(j, statusUpdate, status);
+FROM_JSON(StatusUpdate) {
+    READ_FIELD(status);
 }
 
-void StatusUpdate::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(status)
+TO_JSON(StatusUpdate) {
+    OBJECT{
+        PACKET(StatusUpdate),
+        WRITE_FIELD(status)
     };
 }
 
-DEFER_TO_CLASS(StatusUpdate);
-
-void from_json(const json& j, Sync& sync) {
+FROM_JSON(Sync) {
     // There's no payload to decode, so this really is a no-op
 }
 
-void Sync::convert_to_json(json& j) const {
-    j = json::object();
+TO_JSON(Sync) {
+    OBJECT{ PACKET(Sync) };
 }
 
-DEFER_TO_CLASS(Sync);
-
-void from_json(const json& j, UpdateHint& updateHint) {
-    READ_FIELD(j, updateHint, player);
-    READ_FIELD(j, updateHint, location);
-    READ_OPTIONAL_FIELD(j, updateHint, HintStatus, status);
+FROM_JSON(UpdateHint) {
+    READ_FIELD(player);
+    READ_FIELD(location);
+    READ_OPTIONAL_FIELD(HintStatus, status);
 }
 
-void UpdateHint::convert_to_json(json& j) const {
-    j = json{
-        OBJ_WRITE_FIELD(player),
-        OBJ_WRITE_FIELD(location)
+TO_JSON(UpdateHint) {
+    OBJECT{
+        PACKET(UpdateHint),
+        WRITE_FIELD(player),
+        WRITE_FIELD(location)
     };
-    OBJ_ADD_FIELD_IF_EXISTS(j, status);
+    ADD_FIELD_IF_EXISTS(status);
 }
 
-DEFER_TO_CLASS(UpdateHint);
 /// \endcond
 
 } // namespace packets

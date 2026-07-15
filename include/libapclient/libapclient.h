@@ -19,6 +19,7 @@
 
 #include "packets.h"
 #include "utils.h"
+#include "logger.h"
 
 namespace archipelago {
 
@@ -314,7 +315,11 @@ protected:
      *
      * \param packet the packet to send to the server
      */
-    void sendUnlockedPacket(const packets::Packet& packet);
+    template<class P> void sendUnlockedPacket(const P& packet) {
+        const std::string text = json::array({ static_cast<json>(packet) }).dump();
+        LIBAPCLIENT_LOG("Sending: {}", text);
+        m_socket->sendUtf8Text(text);
+    }
 
     /*! \brief Get the client state **without** locking the mutex.
      *
@@ -561,16 +566,20 @@ public:
 
     /*! \brief Send a single packet.
      *
-     * This uses packets::Packet::to_json(json&) to create a JSON object that
-     * can then be sent to sendMessage(const json&).
+     * Any class sent **must** be convertable to a nlohmann::json object.
+     * This will wrap the object in an array and send it via
+     * sendMessage(const json&).
      *
-     * This method will ultimately lock the mutex in order to ensure that the
-     * socket exists.
+     * \warning This method will ultimately lock the mutex (via
+     * sendMessage(const json&)) in order to ensure that the socket exists.
      *
      * \param packet the packet to send
      * \throws InvalidStateError if the client is not connected to a server
      */
-    void sendPacket(const packets::Packet& packet);
+    template<class P> void sendPacket(const P& packet) {
+        // Wrap the packet in an array
+        sendMessage(json::array({ static_cast<json>(packet) }));
+    }
 
     /*! \brief Send a JSON message to the server.
      *

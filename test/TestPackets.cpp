@@ -89,11 +89,11 @@ TEST(Packets, encodeConnected) {
 TEST(Packets, parseConnectionRefused) {
     json j = json::parse("{\"cmd\":\"ConnectionRefused\",\"errors\":[\"InvalidGame\",\"IncompatibleVersion\"]}");
     auto packet = static_cast<archipelago::packets::ConnectionRefused>(j);
-    EXPECT_THAT(packet.errors, testing::ElementsAre(archipelago::packets::ConnectionRefused::kInvalidGame, archipelago::packets::ConnectionRefused::kIncompatibleVersion));
+    EXPECT_THAT(packet.errors, testing::ElementsAre(archipelago::packets::Errors::kInvalidGame, archipelago::packets::Errors::kIncompatibleVersion));
 }
 
 TEST(Packets, encodeConnectionRefused) {
-    archipelago::packets::ConnectionRefused c({ archipelago::packets::ConnectionRefused::kInvalidItemsHandling });
+    archipelago::packets::ConnectionRefused c({ archipelago::packets::Errors::kInvalidItemsHandling });
     std::string jsonStr = static_cast<json>(c).dump();
     EXPECT_EQ(jsonStr, "{\"cmd\":\"ConnectionRefused\",\"errors\":[\"InvalidItemsHandling\"]}");
 }
@@ -142,9 +142,9 @@ TEST(Packets, parseDataPackage) {
 }
 
 TEST(Packets, encodeDataPackage) {
-    archipelago::packets::DataPackage c;
-    c.games.insert({ "Game 1", json::object() });
-    std::string jsonStr = static_cast<json>(c).dump();
+    archipelago::packets::DataPackage dataPackage;
+    dataPackage.games.insert({ "Game 1", json::object() });
+    std::string jsonStr = static_cast<json>(dataPackage).dump();
     EXPECT_EQ(jsonStr, "{\"cmd\":\"DataPackage\",\"data\":{\"games\":{\"Game 1\":{}}}}");
 }
 
@@ -208,6 +208,11 @@ TEST(Packets, parseInvalidPacket) {
     EXPECT_EQ(packet.type, "Arguments");
     EXPECT_EQ(packet.text, "Retrieve");
     EXPECT_THAT(packet.original_cmd, testing::Optional(std::string("Set")));
+    j = json::parse("{\"cmd\":\"InvalidPacket\",\"type\":\"cmd\",\"original_cmd\":null,\"text\":\"Could not get command from cmd at `cmd`\"}");
+    packet = static_cast<archipelago::packets::InvalidPacket>(j);
+    EXPECT_EQ(packet.type, "cmd");
+    EXPECT_EQ(packet.original_cmd, std::nullopt);
+    EXPECT_EQ(packet.text, "Could not get command from cmd at `cmd`");
 }
 
 TEST(Packets, encodeInvalidPacket) {
@@ -215,7 +220,7 @@ TEST(Packets, encodeInvalidPacket) {
     p.type = "Arguments";
     p.text = "Retrieve";
     std::string jsonStr = static_cast<json>(p).dump();
-    EXPECT_EQ(jsonStr, "{\"cmd\":\"InvalidPacket\",\"text\":\"Retrieve\",\"type\":\"Arguments\"}");
+    EXPECT_EQ(jsonStr, "{\"cmd\":\"InvalidPacket\",\"original_cmd\":null,\"text\":\"Retrieve\",\"type\":\"Arguments\"}");
     p.original_cmd = "Set";
     jsonStr = static_cast<json>(p).dump();
     EXPECT_EQ(jsonStr, "{\"cmd\":\"InvalidPacket\",\"original_cmd\":\"Set\",\"text\":\"Retrieve\",\"type\":\"Arguments\"}");

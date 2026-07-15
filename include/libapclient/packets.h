@@ -120,62 +120,6 @@ const auto kPacketSet = "Set";
 /// \brief `"cmd"` value for SetNotify packets
 const auto kPacketSetNotify = "SetNotify";
 
-/*!
- * \brief Base Packet class.
- *
- * Provides the stubs necessary to send a packet to the Archipelago MultiWorld
- * server - namely the `cmd` field and a method to convert the packet to JSON.
- */
-class Packet {
-public:
-    /*!
-     * \brief Construct a packet.
-     *
-     * The `cmd` field is required - it identifies the packet type.
-     *
-     * \param pCmd the `cmd` field for this packet
-     */
-    Packet(const std::string&& pCmd) : cmd(pCmd) {}
-
-    /*! \brief The name of this packet.
-     *
-     * All packets must have a cmd. This is used by the server to determine what
-     * the packet is asking for and what arguments are necessary. This can be
-     * changed at runtime if necessary, although doing so will alter the way the
-     * packet works.
-     */
-    std::string cmd;
-
-    /*!
-     * \brief Base JSON converter.
-     *
-     * Calls convert_to_json(json &) to create the basic object, and then adds
-     * the cmd field.
-     *
-     * \param j the JSON object to populate
-     */
-    void to_json(json& j) const {
-        convert_to_json(j);
-        j["cmd"] = cmd;
-    }
-protected:
-    /*!
-     * \brief Convert this packet to a JSON object with the fields the
-     * Archipelago MultiWorld server expects.
-     *
-     * This is called with an empty JSON by to_json(json &). The object's `cmd`
-     * field will be set after the object is populated - this allows the usage
-     * of the JSON object constructor:
-     *
-     * ```cpp
-     * j = json { { "field", "value" } };
-     * ```
-     *
-     * \param j the JSON object to populate
-     */
-    virtual void convert_to_json(json& j) const = 0;
-};
-
 /// \brief An object representing software version.
 struct NetworkVersion {
     NetworkVersion(const NetworkVersion& other) : major(other.major), minor(other.minor), build(other.build) {}
@@ -295,55 +239,19 @@ struct NetworkSlot {
 /*! \brief Information about a player connected to the server.
  */
 struct NetworkPlayer {
-    team_id_t team;
-    team_slot_id_t slot;
-    std::string alias;
-    std::string name;
+    team_id_t team{ 0 };
+    team_slot_id_t slot{ 0 };
+    std::string alias{};
+    std::string name{};
 };
 
 //
 // Server Packets (sent to the client)
 //
 
-/*! \brief A packet indicating that a Connect packet was refused.
+/*! \brief A namespace to hold error constants.
  */
-class ConnectionRefused : public Packet {
-public:
-    /*! \brief A list of error tags.
-     *
-     * Known errors are provided as class constants for this packet. It is
-     * possible that in the future, new errors may be added.
-     *
-     * The server will only send back checked errors.
-     */
-    std::vector<std::string> errors;
-    ConnectionRefused() : Packet(kPacketConnectionRefused), errors() {}
-    ConnectionRefused(const ConnectionRefused&) = default;
-    // The existance of constructors that take a list of strings breaks the
-    // template magic that allows casting from a JSON object to this type.
-    // Provide an explicit constructor to work for the default.
-    ConnectionRefused(const json& jsonData);
-    ConnectionRefused(const std::vector<std::string>&& errors) : Packet(kPacketConnectionRefused), errors(errors) {}
-    ConnectionRefused(std::initializer_list<std::string> errors) : Packet(kPacketConnectionRefused), errors(errors) {}
-
-    /*! \brief Searches the list to see if the given error is in it.
-     *
-     * \param error the error to check
-     * \return true if the error is in the error list, false otherwise
-     */
-    bool has_error(const std::string& error) const;
-
-    /*! \brief Searches the list to see if the given error is in it.
-     *
-     * \param error the error to check
-     * \return true if the error is in the error list, false otherwise
-     */
-    bool has_error(const char* error) const { return has_error(std::string(error)); }
-
-    virtual void convert_to_json(json& j) const override;
-
-    // The following are static constants that describe error codes that exist within the Archipelago 0.6.7 server
-
+namespace Errors {
     /*! \brief Indicates that the password given in the Connect packet does not
      * match the room's password.
      */
@@ -368,17 +276,43 @@ public:
      * packet is incompatible with the server.
      */
     static constexpr auto kInvalidItemsHandling = "InvalidItemsHandling";
+}
+
+/*! \brief A packet indicating that a Connect packet was refused.
+ */
+struct ConnectionRefused {
+    /*! \brief A list of error tags.
+     *
+     * Known errors are provided as class constants for this packet. It is
+     * possible that in the future, new errors may be added.
+     *
+     * The server will only send back checked errors.
+     */
+    std::vector<std::string> errors;
+
+    /*! \brief Searches the list to see if the given error is in it.
+     *
+     * \param error the error to check
+     * \return true if the error is in the error list, false otherwise
+     */
+    bool has_error(const std::string& error) const;
+
+    /*! \brief Searches the list to see if the given error is in it.
+     *
+     * \param error the error to check
+     * \return true if the error is in the error list, false otherwise
+     */
+    bool has_error(const char* error) const { return has_error(std::string(error)); }
 };
 
 /*! \brief Slot info is documented as being a map of slot IDs to NetworkSlot
  * objects.
  *
  * Which is true, except JSON requires all keys in an object to be strings. This
- * class exists to handle converting to/from a map with string keys to a map
- * with `int` keys.
+ * exists to handle converting to/from a map with string keys to a map with
+ * `int` keys.
  */
-class SlotInfo {
-public:
+struct SlotInfo {
     /*! \brief The map of player ID to slot info.
      */
     std::map<player_id_t, NetworkSlot> slot_info{};
@@ -390,37 +324,34 @@ public:
  *
  * This is the first packet sent by the server.
  */
-class RoomInfo : public Packet {
-public:
-    RoomInfo() : Packet(kPacketRoomInfo), version(), generator_version(), tags(), password(false), permissions(), hint_cost(0), location_check_points(0), games(), datapackage_checksums(), seed_name(), time(0.0) {}
-
+struct RoomInfo {
     /// \brief the version of Archipelago which the server is running.
-    NetworkVersion version;
+    NetworkVersion version{};
 
     /// \brief the version of Archipelago which generated the multiworld.
-    NetworkVersion generator_version;
+    NetworkVersion generator_version{};
 
     /// \brief the server tags
-    std::vector<std::string> tags;
+    std::vector<std::string> tags{};
 
     /// \brief whether the room requires a password
-    bool password;
+    bool password{ false };
 
     /// \brief a map of commands to permissions to use them
-    std::unordered_map<std::string, Permission> permissions;
+    std::map<std::string, Permission> permissions{};
 
     /*! \brief The percentage of total locations that need to be checked to
      * receive a hint from the server.
      */
-    int hint_cost;
+    int hint_cost{ 0 };
 
     /*! \brief The amount of hint points you receive per item / location check
      * completed.
      */
-    int location_check_points;
+    int location_check_points{ 0 };
 
     /// \brief List of games present in this multiworld.
-    std::vector<std::string> games;
+    std::vector<std::string> games{};
 
     /*! \brief Checksum hash of the individual games' data packages the server
      * will send.
@@ -428,26 +359,24 @@ public:
      * Used by newer clients to decide which games' caches are outdated. See
      * Data Package Contents for more information.
      */
-    std::unordered_map<std::string, std::string> datapackage_checksums;
+    std::map<std::string, std::string> datapackage_checksums{};
 
     /*! \brief The seed name, which is unqiue per seed/randomization method.
      *
      * Games should check to make sure this matches what they expect.
      */
-    std::string seed_name;
+    std::string seed_name{};
 
     /*! \brief Unix time stamp from the server, indicating the time it thinks
      * it is.
      */
-    double time;
-    virtual void convert_to_json(json& j) const override;
+    double time{ 0.0 };
 };
 
 /*! \brief Sent to clients when the connection handshake is successfully
  * completed.
  */
-class Connected : public Packet {
-public:
+struct Connected {
     /// \brief Your team number. See NetworkPlayer for more info on team number.
     team_id_t team{ 0 };
 
@@ -475,19 +404,16 @@ public:
      * Empty if not required.
      * Not present if slot_data in Connect is false.
      */
-    json slot_data;
+    json slot_data{};
 
     /*! \brief maps each slot to a NetworkSlot information.
      */
-    SlotInfo slot_info;
+    SlotInfo slot_info{};
 
     /*! \brief Number of hint points that the current player has.
      */
     // TODO: Could be unsigned?
     int hint_points{ 0 };
-
-    Connected() : Packet(kPacketConnected), slot_data(), slot_info() {}
-    virtual void convert_to_json(json& j) const override;
 
     /*! \brief Look up a player's information based on their name.
      *
@@ -501,21 +427,17 @@ public:
  * This is somewhat poorly documented, the fields present here are based on the
  * Archipelago source code for 0.6.7.
  */
-class RoomUpdate : public Packet {
-public:
-    RoomUpdate() : Packet(kPacketRoomUpdate) {}
+struct RoomUpdate {
     std::optional<int> hint_points;
     std::optional<int> location_check_points;
     std::optional<std::vector<NetworkPlayer>> players;
     std::optional<std::vector<location_id_t>> checked_locations;
-    std::optional<std::unordered_map<std::string, Permission>> permissions;
-    virtual void convert_to_json(json& j) const override;
+    std::optional<std::map<std::string, Permission>> permissions;
 };
 
 /*! \brief A packet indicating items have been sent to this world.
  */
-class ReceivedItems : public Packet {
-public:
+struct ReceivedItems {
     /*! \brief The next empty slot in the list of items for the receiving
      * client.
      */
@@ -523,21 +445,15 @@ public:
     /*! \brief The items which the client is receiving.
      */
     std::vector<NetworkItem> items;
-    /*! \brief Create an empty ReceivedItems packet.
-     */
-    ReceivedItems() : Packet(kPacketReceivedItems), index(0), items() {}
-    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief A response to a LocationScouts packet. Provides information on the
  * locations requested.
  */
-class LocationInfo : public Packet {
+struct LocationInfo {
 public:
     /// \brief Contains list of item(s) in the location(s) scouted.
     std::vector<NetworkItem> locations;
-    LocationInfo() : Packet(kPacketLocationInfo) {}
-    virtual void convert_to_json(json & j) const override;
 };
 
 /*! \brief the status of a hint
@@ -651,15 +567,14 @@ enum class JSONMessagePartColor {
 };
 
 /// \brief Parts of a message in a PrintJSON packet.
-class JSONMessagePart {
-public:
+struct JSONMessagePart {
     /// @brief Raw type string, if it was given
-    std::optional<std::string> type;
-    std::optional<std::string> text;
-    std::optional<std::string> color;
-    std::optional<int> flags;
-    std::optional<player_id_t> player;
-    std::optional<HintStatus> hint_status;
+    std::optional<std::string> type{};
+    std::optional<std::string> text{};
+    std::optional<std::string> color{};
+    std::optional<int> flags{};
+    std::optional<player_id_t> player{};
+    std::optional<HintStatus> hint_status{};
 };
 
 /*! \brief Sent to clients purely to display a message to the player.
@@ -668,7 +583,7 @@ public:
  * metadata that can be used to determine how the text should be displayed and
  * provide additional information to the user.
  */
-class PrintJSON : public Packet {
+struct PrintJSON {
 public:
     /// \brief Textual content of this message
     std::vector<JSONMessagePart> data{};
@@ -690,25 +605,20 @@ public:
     std::optional<std::vector<std::string>> tags{};
     /// \brief Amount of seconds remaining on the countdown
     std::optional<int> countdown{};
-    PrintJSON() : Packet(kPacketPrintJSON) {}
-    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief Sent to clients after a client requested this message be sent to
  * them, more info in the Bounce package.
  */
-class Bounced : public Packet {
-public:
+struct Bounced {
     /// \brief Game names this message is targeting
-    std::optional<std::vector<std::string>> games;
+    std::optional<std::vector<std::string>> games{};
     /// \brief Player slot IDs that this message is targeting
-    std::optional<std::vector<team_slot_id_t>> slots;
+    std::optional<std::vector<team_slot_id_t>> slots{};
     /// \brief Client Tags this message is targeting
-    std::optional<std::vector<std::string>> tags;
+    std::optional<std::vector<std::string>> tags{};
     /// \brief The actual data sent
-    std::optional<json> data;
-    Bounced() : Packet(kPacketBounced) {}
-    virtual void convert_to_json(json& j) const override;
+    std::optional<json> data{};
 };
 
 /*! \brief Receives a data package from the server.
@@ -724,9 +634,7 @@ public:
  * However, it can contain arbitrary data, so this class doesn't force a
  * specific decoding and instead stores the raw JSON data.
  */
-class DataPackage : public Packet {
-public:
-    DataPackage() : Packet(kPacketDataPackage), games() {}
+struct DataPackage {
     /*! \brief The data packages for each game.
      *
      * The JSON generated for this places the games within a single JSON field
@@ -734,22 +642,17 @@ public:
      * detail during conversion to/from JSON and otherwise just stores the
      * games map.
      */
-    std::unordered_map<std::string, json> games;
-    virtual void convert_to_json(json& j) const override;
+    std::map<std::string, json> games{};
 };
 
 /// @brief Sent to clients if the server caught a problem with a packet. This only occurs for errors that are explicitly checked for.
-class InvalidPacket : public Packet {
-public:
+struct InvalidPacket {
     /// \brief The PacketProblemType that was detected in the packet.
     std::string type{};
     /// \brief The cmd argument of the faulty packet, will be unset if the cmd failed to be parsed.
     std::optional<std::string> original_cmd{};
     /// \brief A descriptive message of the problem at hand.
     std::string text{};
-    InvalidPacket() : Packet(kPacketInvalidPacket) {}
-    InvalidPacket(const std::string& type, const std::string& text) : Packet(kPacketInvalidPacket), type(type), text(text) {}
-    virtual void convert_to_json(json& j) const override;
 };
 
 /// @brief indicates the type of problem that was detected in the faulty packet, the known problem types are below but others may be added in the future.
@@ -761,11 +664,8 @@ namespace PacketProblemType {
 };
 
 /// \brief Response from a Get packet with the requested items.
-class Retrieved : public Packet {
-public:
-    std::unordered_map<std::string, json> keys;
-    Retrieved() : Packet(kPacketRetrieved) {}
-    virtual void convert_to_json(json& j) const override;
+struct Retrieved {
+    std::map<std::string, json> keys;
 };
 
 /*! \brief Sent to clients in response to a Set package if `want_reply` was set
@@ -774,8 +674,7 @@ public:
  *
  * SetReply packets are sent even if a Set package did not alter the value for the key.
  */
-class SetReply: public Packet {
-public:
+struct SetReply {
     /// \brief The key that was updated.
     std::string key;
     /// \brief The new value for the key.
@@ -787,8 +686,6 @@ public:
     std::optional<json> original_value{ std::nullopt };
     /// \brief The slot that originally sent the Set package causing this change.
     team_slot_id_t slot{ 0 };
-    SetReply() : Packet(kPacketSetReply), value(nullptr) {}
-    virtual void convert_to_json(json& j) const override;
 };
 
 //
@@ -812,17 +709,16 @@ enum class ItemsHandling {
 /*! \brief Sent by the client to initiate a connection to an Archipelago game
  * session.
  */
-class Connect : public Packet {
-public:
+struct Connect {
     /// \brief the password for the game, if one is required
     std::optional<std::string> password{};
     /// \brief the name of the game the client is playing (should match the AP World)
     /// Optional only when one of the tags is Tracker, HintGame, or TextOnly.
     std::optional<std::string> game{};
     /// \brief the player name for this client
-    std::string name{ "" };
+    std::string name{};
     /// \brief Unique identifier for player. See getPlayerUUID() for details.
-    std::string uuid{ "" };
+    std::string uuid{};
     /*! \brief The Archipelago version this client supports.
      *
      * Defaults to 0.6.7, the version this library was tested against. Earlier
@@ -841,38 +737,25 @@ public:
      *
      * See archipelago::tags for a list of known tags.
      */
-    std::vector<std::string> tags;
+    std::vector<std::string> tags{};
     /// \brief If true, the Connect answer will contain slot_data
-    bool slot_data;
-    virtual void convert_to_json(json& json) const override;
-    Connect() : Packet(kPacketConnect), password(), game(), name(), uuid(), items_handling(ItemsHandling::none), tags(), slot_data(false) {}
-    /// Create a Connect packet with the given game name. This will default items_handling to
-    /// \param game the game name to use in the packet
-    Connect(const std::string& game) : Packet(kPacketConnect), password(), game(game), name(), uuid(), items_handling(ItemsHandling::otherWorlds), tags(), slot_data(false) {}
+    bool slot_data{ false };
 };
 
 /*! \brief Update arguments from the Connect package.
  *
  * Currently only updating tags and items_handling is supported by Archipelago.
  */
-class ConnectUpdate : public Packet {
-public:
+struct ConnectUpdate {
     /// \brief Flags configuring which items should be sent by the server.
     std::optional<ItemsHandling> items_handling{};
     /// \brief Denotes special features or capabilities that the sender is capable of.
     std::optional<std::vector<std::string>> tags{};
-    ConnectUpdate() : Packet(kPacketConnectUpdate) {}
-    virtual void convert_to_json(json& json) const override;
 };
 
-class LocationChecks : public Packet {
-public:
+struct LocationChecks {
     // List of location IDs that have been checked by the client. May include checks that have already been reported to the server.
-    std::vector<location_id_t> locations;
-
-    LocationChecks() : Packet(kPacketLocationChecks), locations() {}
-    LocationChecks(const std::vector<location_id_t>& locations) : Packet(kPacketLocationChecks), locations(locations) {}
-    virtual void convert_to_json(json& json) const override;
+    std::vector<location_id_t> locations{};
 };
 
 /*! \brief Sent to the server to retrieve the items that are on a specified list
@@ -891,16 +774,13 @@ public:
  * 'ledge items' in A Link to the Past. To do this, set the create_as_hint
  * parameter to a non-zero value.
  */
-class LocationScouts : public Packet {
-public:
+struct LocationScouts {
     /// \brief The ids of the locations seen by the client.
     std::vector<location_id_t> locations{};
     /*! \brief If non-zero, the scouted locations get created and broadcasted as
      * a player-visible hint.
      */
     int create_as_hint{ 0 };
-    LocationScouts() : Packet(kPacketLocationScouts) {}
-    virtual void convert_to_json(json& json) const override;
 };
 
 /*! \brief Sent to the server to create hints for a specified list of locations.
@@ -911,32 +791,25 @@ public:
  * When creating hints for your own slot's locations, non-existing locations
  * will silently be skipped.
  */
-class CreateHints : public Packet {
-public:
-    std::vector<location_id_t> locations;
+struct CreateHints {
+    std::vector<location_id_t> locations{};
     player_id_t player{ 0 };
     /// If included, sets the status of the hint to this status.
     /// Defaults to HINT_UNSPECIFIED. Cannot set HINT_FOUND.
     std::optional<HintStatus> status{ std::nullopt };
-    CreateHints() : Packet(kPacketCreateHints) {}
-    virtual void convert_to_json(json& json) const override;
 };
 
 /*! \brief Sent to the server to update the status of a Hint.
  *
  * The client must be the receiving `player` of the Hint, or the update fails.
  */
-class UpdateHint : public Packet {
-public:
+struct UpdateHint {
     /// \brief the ID of the player being updated
     player_id_t player;
     /// \brief the location ID of the hint being updated
     location_id_t location;
     /// \brief the new hint status
     std::optional<HintStatus> status;
-
-    UpdateHint() : Packet(kPacketUpdateHint), player(0), location(0), status(std::nullopt) {}
-    virtual void convert_to_json(json& json) const override;
 };
 
 /*! \brief Sent to the server to update on the sender's status.
@@ -944,34 +817,21 @@ public:
  * Examples include readiness or goal completion. (Example: defeated Ganon in A
  * Link to the Past)
  */
-class StatusUpdate : public Packet {
-public:
-    StatusUpdate() : Packet(kPacketStatusUpdate), status(ClientStatus::unknown) {}
-    StatusUpdate(const StatusUpdate&) = default;
-    StatusUpdate(ClientStatus pStatus) : Packet(kPacketStatusUpdate), status(pStatus) {}
+struct StatusUpdate {
     ClientStatus status;
-    virtual void convert_to_json(json& json) const override;
 };
 
 /*! \brief A Sync packet. This packet has no payload and therefore contains no
- * members. This class exists solely for completeness.
+ * members. This struct exists solely for completeness.
  */
-class Sync : public Packet {
-public:
-    Sync() : Packet(kPacketSync) {}
-    void convert_to_json(json& j) const override;
+struct Sync {
 };
 
 /*! \brief Send text to other players.
  */
-class Say : public Packet {
-public:
-    Say() : Packet(kPacketSay), text() {}
-    Say(const std::string& text) : Packet(kPacketSay), text(text) {}
-    Say(const char* text) : Packet(kPacketSay), text(text) {}
+struct Say {
     /// \brief The text to say
     std::string text;
-    virtual void convert_to_json(json& json) const override;
 };
 
 /*! \brief Requests the data package from the server.
@@ -979,23 +839,19 @@ public:
  * This packet will only function *after* a RoomInfo packet has been received
  * and *before* a Connect packet is sent.
  */
-class GetDataPackage : public Packet {
+struct GetDataPackage {
 public:
-    GetDataPackage() : Packet(kPacketGetDataPackage), games() {}
-    GetDataPackage(const std::vector<std::string>& pGames) : Packet(kPacketGetDataPackage), games(pGames) {}
     /*! \brief A list of games to retrieve.
      *
      * If given, the server will only return games belonging to this set.
      */
-    std::optional<std::vector<std::string>> games;
-    virtual void convert_to_json(json& json) const override;
+    std::optional<std::vector<std::string>> games{};
 };
 
 /*! \brief Send a message to the server that will be relayed (bounced) to other
  * clients.
  */
-class Bounce: public Packet {
-public:
+struct Bounce {
     /// \brief Game names that should receive this message
     std::optional<std::vector<std::string>> games;
     /// \brief Player IDs that should receive this message
@@ -1004,32 +860,30 @@ public:
     std::optional<std::vector<std::string>> tags;
     /// \brief Any data you want to send
     std::optional<json> data;
-    Bounce() : Packet(kPacketBounce) {}
-    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief A Bounce packet that indicates that a player has died.
  */
-class DeathLink {
+struct DeathLink {
     /*! \brief Unix Time Stamp of time of death.
      *
      * See Client::get_remote_time_now() for a method of generating this time
      * stamp.
      */
-    double time;
+    double time{ 0.0 };
 
     /*! \brief Text to explain the cause of death.
      *
      * When provided, or checked, if the string is non-empty, it should contain
      * the player name, ex. "Berserker was run over by a train."
      */
-    std::optional<std::string> cause;
+    std::optional<std::string> cause{};
 
     /*! \brief Name of the player who first died.
      *
      * Can be a slot name, but can also be a name from within a multiplayer game.
      */
-    std::string source;
+    std::string source{};
 };
 
 /*! \brief Used to request a single or multiple values from the server's data
@@ -1041,14 +895,10 @@ class DeathLink {
  * Archipelago allows extra JSON fields to be included in the Get packet that will
  * then be returned in the associated Retrieved packet.
  */
-class Get : public Packet {
+struct Get {
 public:
     /// \brief Keys to retrieve the values for.
     std::vector<std::string> keys;
-    Get() : Packet(kPacketGet), keys() {}
-    Get(const std::string& key) : Packet(kPacketGet), keys({ key }) {}
-    Get(const std::vector<std::string>& keys) : Packet(kPacketGet), keys(keys) {}
-    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief operation to perform on a value when setting it via a Set packet.
@@ -1056,15 +906,22 @@ public:
 enum class DataStorageOperationType {
     /// \brief Sets the current value of the key to value.
     opReplace,
-    /// \brief If the key has no value yet, sets the current value of the key to default of the Set's package (value is ignored).
+    /*! \brief If the key has no value yet, sets the current value of the key to
+     * default of the Set's package (value is ignored).
+     */
     opDefault,
-    /// \brief Adds value to the current value of the key, if both the current value and value are arrays then value will be appended to the current value.
+    /*! \brief Adds value to the current value of the key, if both the current
+     * value and value are arrays then value will be appended to the current
+     * value.
+     */
     opAdd,
     /// \brief Multiplies the current value of the key by value.
     opMul,
     /// \brief Multiplies the current value of the key to the power of value.
     opPow,
-    /// \brief Sets the current value of the key to the remainder after division by value.
+    /*! \brief Sets the current value of the key to the remainder after division
+     * by value.
+     */
     opMod,
     /// \brief Floors the current value(value is ignored).
     opFloor,
@@ -1078,17 +935,32 @@ enum class DataStorageOperationType {
     opAnd,
     /// \brief Applies a bitwise OR to the current value of the key with value.
     opOr,
-    /// \brief Applies a bitwise Exclusive OR to the current value of the key with value.
+    /*! \brief Applies a bitwise Exclusive OR to the current value of the key
+     * with value.
+     */
     opXor,
-    /// \brief Applies a bitwise left - shift to the current value of the key by value.
+    /*! \brief Applies a bitwise left - shift to the current value of the key
+     * by value.
+     */
     opLeftShift,
-    /// \brief Applies a bitwise right - shift to the current value of the key by value.
+    /*! \brief Applies a bitwise right - shift to the current value of the key
+     * by value.
+     */
     opRightShift,
-    /// \brief List only : removes the first instance of value found in the list.
+    /*! \brief *(List only)* removes the first instance of value found in the
+     * list.
+     */
     opRemove,
-    /// \brief List or Dict : for lists it will remove the index of the value given. for dicts it removes the element with the specified key of value.
+    /*! \brief *(List or Dict)* For lists it will remove the index of the value
+     * given. For dicts it removes the element with the specified key of value.
+     */
     opPop,
-    /// \brief List or Dict : Adds the elements of value to the container if they weren't already present. In the case of a Dict, already present keys will have their corresponding values updated.
+    /*! \brief *(List or Dict)* Adds the elements of value to the container if
+     * they weren't already present.
+     *
+     * In the case of a Dict, already present keys will have their corresponding
+     * values updated.
+     */
     opUpdate
 };
 
@@ -1109,8 +981,7 @@ struct DataStorageOperation {
  * monitored with a SetNotify packet. Keys that start with `_read_` cannot be
  * set.
  */
-class Set : public Packet {
-public:
+struct Set {
     /// \brief The key to manipulate. Can never start with `_read`.
     std::string key{};
     /*! \brief The default value to use in case the key has no value on the
@@ -1124,28 +995,13 @@ public:
     bool want_reply{ false };
     /// \brief Operations to apply to the value, multiple operations can be present and they will be executed in order of appearance.
     std::vector<DataStorageOperation> operations{};
-    Set() : Packet(kPacketSet) {}
-    Set(const std::string& key) : Packet(kPacketSet), key(key) {}
-    Set(const std::string& key,
-        const json& default_value,
-        bool want_reply = false,
-        const std::vector<DataStorageOperation> operations = std::vector<DataStorageOperation>()
-    ) : Packet(kPacketSet),
-        key(key),
-        default_value(default_value),
-        want_reply(want_reply),
-        operations(operations) {}
-    virtual void convert_to_json(json& j) const override;
 };
 
 /*! \brief Requests that the server notify a client whenever a value changes.
  */
-class SetNotify : public Packet {
-public:
+struct SetNotify {
     /// \brief Keys to receive all SetReply packages for.
-    std::vector<std::string> keys;
-    SetNotify() : Packet(kPacketSetNotify) {}
-    virtual void convert_to_json(json& j) const override;
+    std::vector<std::string> keys{};
 };
 
 //
@@ -1156,76 +1012,43 @@ public:
 //
 // There's no good reason to list these in Doxygen so ... don't.
 /// \cond
-void from_json(const json& j, Bounce& bounce);
-void to_json(json& j, const Bounce& bounce);
-void from_json(const json& j, Bounced& bounced);
-void to_json(json& j, const Bounced& bounced);
-void from_json(const json& j, Connect& connect);
-void to_json(json& j, const Connect& connect);
-void from_json(const json& j, Connected& connected);
-void to_json(json& j, const Connected& connected);
-void from_json(const json& j, ConnectionRefused& connectionRefused);
-void to_json(json& j, const ConnectionRefused& connectionRefused);
-void from_json(const json& j, ConnectUpdate& connectUpdate);
-void to_json(json& j, const ConnectUpdate& connectUpdate);
-void from_json(const json& j, CreateHints& createHints);
-void to_json(json& j, const CreateHints& createHints);
-void from_json(const json& j, DataPackage& dataPackage);
-void to_json(json& j, const DataPackage& dataPackage);
-void from_json(const json& j, DataStorageOperation& dataStorageOperation);
-void to_json(json& j, const DataStorageOperation& dataStorageOperation);
-void from_json(const json& j, DataStorageOperationType& dataStorageOperationType);
-void to_json(json& j, const DataStorageOperationType& dataStorageOperationType);
-void from_json(const json& j, Get& get);
-void to_json(json& j, const Get& get);
-void from_json(const json& j, GetDataPackage& getDataPackage);
-void to_json(json& j, const GetDataPackage& getDataPackage);
-void from_json(const json& j, InvalidPacket& invalidPacket);
-void to_json(json& j, const InvalidPacket& invalidPacket);
-void from_json(const json& j, JSONMessagePart& jsonMessagePart);
-void to_json(json& j, const JSONMessagePart& jSONMessagePart);
-void from_json(const json& j, LocationChecks& locationChecks);
-void to_json(json& j, const LocationChecks& locationChecks);
-void from_json(const json& j, LocationInfo& locationInfo);
-void to_json(json& j, const LocationInfo& locationInfo);
-void from_json(const json& j, LocationScouts& locationScouts);
-void to_json(json& j, const LocationScouts& locationScouts);
-void from_json(const json& j, NetworkItem& networkItem);
-void to_json(json& j, const NetworkItem& networkItem);
-void from_json(const json& j, NetworkPlayer& networkPlayer);
-void to_json(json& j, const NetworkPlayer& networkPlayer);
-void from_json(const json& j, NetworkSlot& networkSlot);
-void to_json(json& j, const NetworkSlot& networkSlot);
-void from_json(const json& j, NetworkVersion& networkVersion);
-void to_json(json& j, const NetworkVersion& networkVersion);
-void from_json(const json& j, PrintJSON& printJSON);
-void to_json(json& j, const PrintJSON& printJSON);
-void from_json(const json& j, PrintJsonType& printJsonType);
-void to_json(json& j, const PrintJsonType& printJsonType);
-void from_json(const json& j, ReceivedItems& receivedItems);
-void to_json(json& j, const ReceivedItems& receivedItems);
-void from_json(const json& j, Retrieved& retrieved);
-void to_json(json& j, const Retrieved& retrieved);
-void from_json(const json& j, RoomInfo& roomInfo);
-void to_json(json& j, const RoomInfo& roomInfo);
-void from_json(const json& j, RoomUpdate& roomUpdate);
-void to_json(json& j, const RoomUpdate& roomUpdate);
-void from_json(const json& j, Say& say);
-void to_json(json& j, const Say& say);
-void from_json(const json& j, Set& set);
-void to_json(json& j, const Set& set);
-void from_json(const json& j, SetNotify& setNotify);
-void to_json(json& j, const SetNotify& setNotify);
-void from_json(const json& j, SetReply& setReply);
-void to_json(json& j, const SetReply& setReply);
-void from_json(const json& j, SlotInfo& slotInfo);
-void to_json(json& j, const SlotInfo& slotInfo);
-void from_json(const json& j, StatusUpdate& statusUpdate);
-void to_json(json& j, const StatusUpdate& statusUpdate);
-void from_json(const json& j, Sync& sync);
-void to_json(json& j, const Sync& sync);
-void from_json(const json& j, UpdateHint& updateHint);
-void to_json(json& j, const UpdateHint& updateHint);
+#define _JSON_CONVERTERS(NAME) void from_json(const json& j, NAME& obj); \
+                               void to_json(json& j, const NAME& obj)
+_JSON_CONVERTERS(Bounce);
+_JSON_CONVERTERS(Bounced);
+_JSON_CONVERTERS(Connect);
+_JSON_CONVERTERS(Connected);
+_JSON_CONVERTERS(ConnectionRefused);
+_JSON_CONVERTERS(ConnectUpdate);
+_JSON_CONVERTERS(CreateHints);
+_JSON_CONVERTERS(DataPackage);
+_JSON_CONVERTERS(DataStorageOperation);
+_JSON_CONVERTERS(DataStorageOperationType);
+_JSON_CONVERTERS(Get);
+_JSON_CONVERTERS(GetDataPackage);
+_JSON_CONVERTERS(InvalidPacket);
+_JSON_CONVERTERS(JSONMessagePart);
+_JSON_CONVERTERS(LocationChecks);
+_JSON_CONVERTERS(LocationInfo);
+_JSON_CONVERTERS(LocationScouts);
+_JSON_CONVERTERS(NetworkItem);
+_JSON_CONVERTERS(NetworkPlayer);
+_JSON_CONVERTERS(NetworkSlot);
+_JSON_CONVERTERS(NetworkVersion);
+_JSON_CONVERTERS(PrintJSON);
+_JSON_CONVERTERS(PrintJsonType);
+_JSON_CONVERTERS(ReceivedItems);
+_JSON_CONVERTERS(Retrieved);
+_JSON_CONVERTERS(RoomInfo);
+_JSON_CONVERTERS(RoomUpdate);
+_JSON_CONVERTERS(Say);
+_JSON_CONVERTERS(Set);
+_JSON_CONVERTERS(SetNotify);
+_JSON_CONVERTERS(SetReply);
+_JSON_CONVERTERS(SlotInfo);
+_JSON_CONVERTERS(StatusUpdate);
+_JSON_CONVERTERS(Sync);
+_JSON_CONVERTERS(UpdateHint);
 /// \endcond
 
 

@@ -39,7 +39,7 @@ ClientRoomInfo& ClientRoomInfo::operator<<(const packets::RoomUpdate& roomUpdate
         location_check_points = *roomUpdate.location_check_points;
     }
     if (roomUpdate.permissions.has_value()) {
-        permissions = *roomUpdate.permissions;
+        permissions = roomUpdate.permissions.value();
     }
     return *this;
 }
@@ -259,11 +259,11 @@ void Client::sendGetDataPackage(const std::vector<std::string>& games) {
 //void sendBounce(packets::Bounce& bounce);
 
 void Client::sendGet(const std::string& key) {
-    sendPacket(packets::Get(key));
+    sendPacket(packets::Get{ .keys = { key } });
 }
 
 void Client::sendGet(const std::vector<std::string>& keys) {
-    sendPacket(packets::Get(keys));
+    sendPacket(packets::Get{ .keys = keys });
 }
 
 void Client::sendSet(const std::string& key, const json& defaultValue, bool wantReply, const std::vector<packets::DataStorageOperation>& operations) {
@@ -271,23 +271,6 @@ void Client::sendSet(const std::string& key, const json& defaultValue, bool want
 }
 //void sendSet(packets::Set& set);
 //void sendSetNotify(packets::SetNotify& setNotify);
-
-void Client::sendPacket(const packets::Packet& packet) {
-    // Basically, convert to JSON and then send.
-    json j;
-    packet.to_json(j);
-    // Send the message within a list
-    sendMessage(json::array({ j }));
-}
-
-void Client::sendUnlockedPacket(const packets::Packet& packet) {
-    json j;
-    packet.to_json(j);
-    j = json::array({ j });
-    const std::string text = j.dump();
-    LIBAPCLIENT_LOG("Sending: {}", text);
-    m_socket->sendUtf8Text(text);
-}
 
 void Client::sendMessage(const json& payload) {
     std::lock_guard lock(m_mutex);
