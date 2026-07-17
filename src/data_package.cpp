@@ -1,3 +1,4 @@
+/*! \file Implementation of data package-related code. */
 #include "libapclient/tracker.h"
 #include "libapclient/data_package.h"
 #include "libapclient/logger.h"
@@ -16,8 +17,8 @@ template<typename ID> void populate(IDMap<ID, std::string>& map, const json& j) 
     }
 }
 
-GameData::GameData(const json& gamePackage) : locations(), items(), checksum() {
-    operator<<(gamePackage);
+void from_json(const json& jsonPackage, GameData& gameData) {
+    gameData << jsonPackage;
 }
 
 GameData& GameData::operator<<(const json& gamePackage) {
@@ -64,6 +65,22 @@ std::string GameData::getLocationName(location_id_t id) {
     else {
         return *locationName;
     }
+}
+
+bool GameData::hasItemId(item_id_t id) {
+    return items.getById(id) != nullptr;
+}
+
+bool GameData::hasLocationId(item_id_t id) {
+    return locations.getById(id) != nullptr;
+}
+
+std::optional<item_id_t> GameData::getItemID(const std::string& itemName) {
+    return items.getByObject(itemName);
+}
+
+std::optional<location_id_t> GameData::getLocationID(const std::string& locationName) {
+    return locations.getByObject(locationName);
 }
 
 std::vector<std::string> GameData::getItemNames() {

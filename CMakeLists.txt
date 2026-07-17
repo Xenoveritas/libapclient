@@ -78,11 +78,11 @@ if (NOT TARGET stduuid)
 endif()
 
 set(LIBAPCLIENT_SOURCES
+    "src/data_package.cpp"
     "src/libapclient.cpp"
     "src/logger.cpp"
     "src/packets.cpp"
     "src/simple_client.cpp"
-    "src/tracker.cpp"
     "src/utils.cpp"
 )
 

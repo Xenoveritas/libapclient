@@ -41,10 +41,10 @@ public:
 
     const std::optional<ID> getByObject(T obj) const  {
         auto iter = objectToId.find(obj);
-        if (iter == idToObject.end()) {
+        if (iter == objectToId.end()) {
             return std::nullopt;
         }
-        return iter.get();
+        return iter->second;
     }
 
     bool empty() const {
@@ -69,31 +69,87 @@ public:
  *
  * However, some games may have additional data provided by the APWorld.
  */
-class GameData {
-public:
-    IDMap<location_id_t, std::string> locations;
-    IDMap<item_id_t, std::string> items;
-    std::string checksum;
-
-    GameData() : locations(), items(), checksum() {}
-    GameData(const json& gamePackage);
-    ~GameData() {}
+struct GameData {
+    IDMap<location_id_t, std::string> locations{};
+    IDMap<item_id_t, std::string> items{};
+    std::string checksum{};
 
     GameData& operator<<(const json& gamePackage);
     void loadGame(const packets::DataPackage& package, const std::string& gameName);
 
+    /*! \brief Gets the item name for the given ID.
+     *
+     * If no name exists for this item ID, this will return "Item<id>".
+     * (The assumption is that any ID used is expected to exist, and if it
+     * doesn't, an error has occurred generating the game data. Use
+     * hasItemId(item_id_t) to check if the item exists in this data package.)
+     *
+     * \param id the item ID to lookup
+     * \return the item name for that ID and a default if it doesn't exist
+     */
     std::string getItemName(item_id_t id);
+
+    /*! \brief Gets the location name for the given ID.
+     *
+     * If no name exists for this location ID, this will return "Location<id>".
+     * (The assumption is that any ID used is expected to exist, and if it
+     * doesn't, an error has occurred generating the game data. Use
+     * hasLocationId(item_id_t) to check if the location exists in this data
+     * package.)
+     *
+     * \param id the location ID to lookup
+     * \return the location name for that ID and a default if it doesn't exist
+     */
     std::string getLocationName(location_id_t id);
+
+    /*! \brief Check if an item name exists for the given ID.
+     *
+     * \param id the item ID to lookup
+     * \return true if a name exists for the given item ID
+     */
+    bool hasItemId(item_id_t id);
+
+    /*! \brief Check if a location name exists for the given ID.
+     *
+     * \param id the location ID to lookup
+     * \return true if a name exists for the given location ID
+     */
+    bool hasLocationId(item_id_t id);
+
+    /*! \brief Gets the item ID for the given item name.
+     *
+     * If the item doesn't exist, the optional is `std::nullopt`.
+     *
+     * \param itemName the item name to lookup
+     * \return the item ID if it exists
+     */
+    std::optional<item_id_t> getItemID(const std::string& itemName);
+
+    /*! \brief Gets the location ID for the given location name.
+     *
+     * If the item doesn't exist, the optional is `std::nullopt`.
+     *
+     * \param locationName the location name to lookup
+     * \return the location ID if it exists
+     */
+    std::optional<location_id_t> getLocationID(const std::string& locationName);
 
     std::vector<std::string> getItemNames();
     std::vector<std::string> getLocationNames();
 };
 
-/*! \brief The default deserializer - always uses BaseDP(const json&) to deserialize.
+void from_json(const json& j, GameData& data);
+
+/*! \brief The default deserializer.
+ *
+ * This uses `static_cast<BaseDP>(dataPackage)` to deserialize the data package
+ * from the JSON, which effectively uses `from_json(const json&, BaseDP)`.
  */
 template<class BaseDP> class BasicDataPackageDeserializer {
 public:
-    BaseDP deserialize(const std::string& game, const json& dataPackage) {}
+    BaseDP deserialize(const std::string& game, const json& dataPackage) {
+        return static_cast<BaseDP>(dataPackage);
+    }
 };
 
 /*! \brief The key for a data package: the game name and checksum.
@@ -138,23 +194,28 @@ public:
      */
     DataPackageCache() : dataPackages(), checksums(), deserializer() {}
 
-    /*! \brief Gets the number of data packages cached.
+    /*! \brief Gets the number of data packages cached. This is not necessarily
+     * the same as the number of checksums known.
      */
     size_t size() {
         return dataPackages.size();
     }
 
+    size_t knownChecksumCount() {
+        return checksums.size();
+    }
+
     void checkRoomInfo(const packets::RoomInfo& roomInfo) {
         // Check to make sure our checksums match the existing ones
-        for (auto& dpChecksum : roomInfo.datapackage_checksums) {
+        for (auto& dpPair : roomInfo.datapackage_checksums) {
             // See if this exists
-            auto iter = checksums.find(dpChecksum.first);
+            auto iter = checksums.find(dpPair.first);
             if (iter == checksums.end()) {
                 // Not found. Insert a new empty pair
-                checksums.insert({ dpChecksum.first, std::string() });
-            } else if (dpChecksum.second != *iter) {
+                checksums.insert({ dpPair.first, dpPair.second });
+            } else if (dpPair.second != iter->first) {
                 // Checksum does not match. Blank out our game data.
-                dataPackages.erase(dpChecksum.first);
+                dataPackages.erase(dpPair.first);
             }
         }
     }
@@ -237,6 +298,10 @@ public:
         }
     }
 };
+
+/*! \brief Basic DataPackageCache that stores game data in a GameData.
+ */
+typedef DataPackageCache<GameData> GameDataCache;
 
 }
 
