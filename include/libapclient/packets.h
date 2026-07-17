@@ -52,15 +52,29 @@ namespace archipelago {
 // TODO: Currently just int. May become int64_t?
 // IDs are currently limited to 53 bits, negative IDs are reserved by Archipelago.
 
-/// \brief A player ID, this is unique within a room
-typedef int player_id_t;
-/// \brief A team ID, this is unique within a room
+/*! \brief A team ID, this is unique within a room.
+ *
+ * Team IDs start at 0, however, any Archipelago-generated message referring to
+ * a team adds 1 to the ID for display. For example, messages to Team ID 0 will
+ * show up as `"Team #1"` in PrintJSON messages.
+ *
+ * Team slots are unique within the team, but **not** within a room.
+ */
 typedef int team_id_t;
-/// \brief A team slot ID, this is unique within a team
+/*! \brief A team slot ID, this is unique within a team.
+ *
+ * Team slots start at 1. Players may have the same team slot number provided
+ * they aren't on the same team.
+ */
 typedef int team_slot_id_t;
 /// \brief An item ID, this is unique within a single world
 typedef int item_id_t;
-/// \brief A location ID, this is unique within a single world
+/*! \brief A location ID, this is unique within a single world
+ *
+ * Valid location IDs are always positive, *however*, Archipelago reserves
+ * negative IDs for "Archipelago" locations. For example, -2 is "from the
+ * starting inventory" and -1 is "from the cheat console giving the item."
+ */
 typedef int location_id_t;
 
 namespace packets {
@@ -204,9 +218,11 @@ struct NetworkItem {
     location_id_t location{ 0 };
     /*! \brief the player slot of the world the item is located in, except when
      * inside a LocationInfo Packet then it will be the slot of the player to
-     * receive the item
+     * receive the item.
+     *
+     * This is always a player on the same team as the active client.
      */
-    player_id_t player{ 0 };
+    team_slot_id_t player{ 0 };
     int flags{ 0 };
     bool isProgression() { return flags & (int)NetworkItemFlag::progression; }
     bool isUseful() { return flags & (int)NetworkItemFlag::useful; }
@@ -233,7 +249,7 @@ struct NetworkSlot {
     /// \brief the type of slot
     SlotType type{ SlotType::player };
     /// \brief group members(?)
-    std::vector<player_id_t> group_members{};
+    std::vector<team_slot_id_t> group_members{};
 };
 
 /*! \brief Information about a player connected to the server.
@@ -315,7 +331,7 @@ struct ConnectionRefused {
 struct SlotInfo {
     /*! \brief The map of player ID to slot info.
      */
-    std::map<player_id_t, NetworkSlot> slot_info{};
+    std::map<team_slot_id_t, NetworkSlot> slot_info{};
 
     const NetworkSlot* getNetworkSlotByName(const std::string& name) const;
 };
@@ -573,7 +589,7 @@ struct JSONMessagePart {
     std::optional<std::string> text{};
     std::optional<std::string> color{};
     std::optional<int> flags{};
-    std::optional<player_id_t> player{};
+    std::optional<team_slot_id_t> player{};
     std::optional<HintStatus> hint_status{};
 };
 
@@ -590,7 +606,7 @@ public:
     /// \brief the type of message
     PrintJsonType type{ PrintJsonType::none };
     /// \brief Destination player's ID (only valid on ItemSend, ItemCheat, Hint)
-    std::optional<player_id_t> receiving{};
+    std::optional<team_slot_id_t> receiving{};
     /// \brief Source player's ID, location ID, item ID and item flags (only valid on ItemSend, ItemCheat, Hint)
     std::optional<NetworkItem> item{};
     /// \brief Whether the location hinted for was checked (only valid on Hint)
@@ -793,7 +809,7 @@ struct LocationScouts {
  */
 struct CreateHints {
     std::vector<location_id_t> locations{};
-    player_id_t player{ 0 };
+    team_slot_id_t player{ 0 };
     /// If included, sets the status of the hint to this status.
     /// Defaults to HINT_UNSPECIFIED. Cannot set HINT_FOUND.
     std::optional<HintStatus> status{ std::nullopt };
@@ -805,7 +821,7 @@ struct CreateHints {
  */
 struct UpdateHint {
     /// \brief the ID of the player being updated
-    player_id_t player;
+    team_slot_id_t player;
     /// \brief the location ID of the hint being updated
     location_id_t location;
     /// \brief the new hint status
@@ -854,8 +870,12 @@ public:
 struct Bounce {
     /// \brief Game names that should receive this message
     std::optional<std::vector<std::string>> games;
-    /// \brief Player IDs that should receive this message
-    std::optional<std::vector<player_id_t>> slots;
+    /*! \brief Player slot IDs that should receive this message.
+     *
+     * Messages can only be bounced to players on the same team, so this is
+     * always within a team.
+     */
+    std::optional<std::vector<team_slot_id_t>> slots;
     /// \brief Client tags that should receive this message
     std::optional<std::vector<std::string>> tags;
     /// \brief Any data you want to send

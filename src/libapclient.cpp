@@ -235,11 +235,15 @@ void Client::sendLocationChecks(const std::vector<location_id_t>& location_ids) 
 }
 
 void Client::sendSay(const std::string& say) {
-    sendPacket(packets::Say(say));
+    sendPacket(packets::Say{
+        .text = say
+    });
 }
 
 void Client::sendSay(const char* say) {
-    sendPacket(packets::Say(say));
+    sendPacket(packets::Say{
+        .text = say
+    });
 }
 
 //void sendLocationScouts(packets::LocationScouts& locationScouts);
@@ -269,8 +273,12 @@ void Client::sendGet(const std::vector<std::string>& keys) {
 void Client::sendSet(const std::string& key, const json& defaultValue, bool wantReply, const std::vector<packets::DataStorageOperation>& operations) {
     sendPacket(packets::Set(key, defaultValue, wantReply, operations));
 }
-//void sendSet(packets::Set& set);
-//void sendSetNotify(packets::SetNotify& setNotify);
+
+void Client::sendSetNotify(const std::vector<std::string> keys) {
+    sendPacket(packets::SetNotify{
+        .keys = keys
+    });
+}
 
 void Client::sendMessage(const json& payload) {
     std::lock_guard lock(m_mutex);

@@ -125,7 +125,7 @@ bool NetworkVersion::operator<(const NetworkVersion& other) const {
 // These are alphabetized to keep the order somewhat understandable.
 FROM_JSON(Bounce) {
     READ_OPTIONAL_FIELD(std::vector<std::string>, games);
-    READ_OPTIONAL_FIELD(std::vector<player_id_t>, slots);
+    READ_OPTIONAL_FIELD(std::vector<team_slot_id_t>, slots);
     READ_OPTIONAL_FIELD(std::vector<std::string>, tags);
     READ_OPTIONAL_FIELD(json, data);
 }
@@ -142,7 +142,7 @@ TO_JSON(Bounce) {
 
 FROM_JSON(Bounced) {
     READ_OPTIONAL_FIELD(std::vector<std::string>, games);
-    READ_OPTIONAL_FIELD(std::vector<player_id_t>, slots);
+    READ_OPTIONAL_FIELD(std::vector<team_slot_id_t>, slots);
     READ_OPTIONAL_FIELD(std::vector<std::string>, tags);
     READ_OPTIONAL_FIELD(json, data);
 }
@@ -426,7 +426,7 @@ FROM_JSON(JSONMessagePart) {
     READ_OPTIONAL_FIELD(std::string, text);
     READ_OPTIONAL_FIELD(std::string, color);
     READ_OPTIONAL_FIELD(int, flags);
-    READ_OPTIONAL_FIELD(player_id_t, player);
+    READ_OPTIONAL_FIELD(team_slot_id_t, player);
     READ_OPTIONAL_FIELD(HintStatus, hint_status);
 }
 
@@ -548,7 +548,7 @@ TO_JSON(NetworkVersion) {
 FROM_JSON(PrintJSON) {
     READ_FIELD(data);
     READ_FIELD_IF_EXISTS(type, PrintJsonType::none);
-    READ_OPTIONAL_FIELD(player_id_t, receiving);
+    READ_OPTIONAL_FIELD(team_slot_id_t, receiving);
     READ_OPTIONAL_FIELD(NetworkItem, item);
     READ_OPTIONAL_FIELD(bool, found);
     READ_OPTIONAL_FIELD(team_id_t, team);

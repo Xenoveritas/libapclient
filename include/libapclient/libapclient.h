@@ -527,7 +527,7 @@ public:
 
     /// Sends a bounce packet to all other clients in the game.
     void sendBounce(const std::optional<std::vector<std::string>&> games,
-        std::optional<std::vector<player_id_t>&> slots,
+        std::optional<std::vector<team_slot_id_t>&> slots,
         std::optional<std::vector<std::string>&> tags,
         std::optional<json&> data
     );
@@ -562,7 +562,12 @@ public:
      * \param operations a list of operations to apply to the value
      */
     void sendSet(const std::string& key, const json& defaultValue, bool wantReply = false, const std::vector<packets::DataStorageOperation>& operations = std::vector<packets::DataStorageOperation>());
-    //void sendSetNotify(packets::SetNotify& setNotify);
+    
+    /*! \brief Sends a SetNotify request to the server.
+     *
+     * \param keys the keys to receive notifications for
+     */
+    void sendSetNotify(const std::vector<std::string> keys);
 
     /*! \brief Send a single packet.
      *
