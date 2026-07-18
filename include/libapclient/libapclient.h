@@ -47,8 +47,7 @@ namespace tag {
  * There's a good chance this will (eventually) be changed to not extend
  * packets::RoomInfo and instead store information on its own.
  */
-class ClientRoomInfo : public packets::RoomInfo {
-public:
+struct ClientRoomInfo : public packets::RoomInfo {
     /*!
      * Number of hint points the user has. This is updated via RoomUpdate
      * packets but is initially sent via a Connected packet.
@@ -66,7 +65,7 @@ public:
      * based on the local steady clock. When no packet has been received,
      * time_since_epoch() is 0.
      */
-    std::chrono::time_point<std::chrono::steady_clock> m_localTime;
+    std::chrono::time_point<std::chrono::steady_clock> m_localTime{};
 
     /*!
      * Allows the room info to be updated based on an incoming
@@ -86,7 +85,6 @@ public:
      */
     ClientRoomInfo& operator<<(const packets::Connected& connected);
 
-
     /*!
      * Allows the room info to be updated based on an incoming
      * packets::RoomUpdate packet. This updates the number of hint points the
@@ -95,9 +93,6 @@ public:
      * \return itself
      */
     ClientRoomInfo& operator<<(const packets::RoomUpdate& roomUpdate);
-
-    /// Default constructor. Sets everything to blank or 0.
-    ClientRoomInfo() : RoomInfo(), m_localTime() {}
 
     /*!
      * \brief Calculate the current time that the server likely thinks it is.

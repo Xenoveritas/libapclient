@@ -2,9 +2,13 @@
  * \brief a scrollable "console" in FTXUI
  */
 
+#include <algorithm>
+#include <utility>
+
 #include <ftxui/component/app.hpp>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/event.hpp>
+#include <ftxui/component/mouse.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/color.hpp>
 
@@ -66,7 +70,7 @@ ftxui::Element ConsoleLine::Render() {
     return ftxui::hflow(elements);
 }
 
-ConsoleComponent::ConsoleComponent() : lines(), lastLine(), scrollY(0), size() {}
+ConsoleComponent::ConsoleComponent() : lines(), lastLine(), scrollY(0), consoleHeight(0), size() {}
 ConsoleComponent::~ConsoleComponent() {
 }
 
@@ -77,54 +81,73 @@ ftxui::Element ConsoleComponent::OnRender() {
     for (auto& line : lines) {
         children.push_back(line.Render());
     }
-    return ftxui::flexbox(children, {
-        .direction = ftxui::FlexboxConfig::Direction::Column
+    auto consoleElement = ftxui::vbox(children);
+    consoleElement->ComputeRequirement();
+    consoleHeight = consoleElement->requirement().min_y;
+    return ftxui::dbox({
+        std::move(consoleElement),
+        ftxui::vbox({
+            // Padding to move the selected element down
+            ftxui::text("") | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, scrollY),
+            // focused element to scroll to
+            ftxui::text("") | ftxui::focus
+        })
     })
         | ftxui::vscroll_indicator
-        | ftxui::focusPosition(0, scrollY)
         | ftxui::yframe
-        | ftxui::flex
+        | ftxui::yflex
         | ftxui::reflect(size);
 }
 
 bool ConsoleComponent::OnEvent(ftxui::Event event) {
+    if (event.is_mouse()) {
+        const ftxui::Mouse& mouse = event.mouse();
+        if (mouse.motion == ftxui::Mouse::Pressed) {
+            switch (mouse.button) {
+                case ftxui::Mouse::Left:
+                    TakeFocus();
+                    break;
+                case ftxui::Mouse::WheelUp:
+                    scrollByLine(-1);
+                    break;
+                case ftxui::Mouse::WheelDown:
+                    scrollByLine(1);
+                    break;
+                default:
+                    // Intentionally ignore
+                    break;
+            }
+        }
+    }
     if (event == ftxui::Event::ArrowUp) {
         // Scroll up
-        scrollBy(-1);
+        scrollByLine(-1);
         return true;
     }
     if (event == ftxui::Event::ArrowDown) {
-        scrollBy(1);
+        scrollByLine(1);
         return true;
     }
     if (event == ftxui::Event::PageUp) {
-        scrollBy(-10);
+        scrollByPage(-1);
         return true;
     }
     if (event == ftxui::Event::PageDown) {
-        scrollBy(10);
+        scrollByPage(1);
         return true;
     }
     return false;
 }
 
-void ConsoleComponent::scrollBy(int scrollDelta) {
+void ConsoleComponent::scrollByLine(int scrollDelta) {
     scrollY += scrollDelta;
-    // There's always a single line (the last)
-    int lineHeight = lines.size() + 1;
-    // Actual max is whatever our line count is - height
-    int min = lineHeight - size.y_max - size.y_min;
-    if (scrollY < min) {
-        scrollY = min;
-    }
-    if (scrollY > lineHeight) {
-        scrollY = lineHeight;
-    }
+    scrollY = std::max(0, std::min(scrollY, consoleHeight - 1));
+    LIBAPCLIENT_LOG("Scroll: {:d} Console Height: {:d} Min Y: {:d} Min X: {:d}", scrollY, getHeight(), size.y_min, size.y_max);
 }
 
-void ConsoleComponent::scrollTo(int line) {
+void ConsoleComponent::scrollByPage(int pageDelta) {
     // For now:
-    scrollY = line + size.y_max - size.y_min;
+    scrollByLine(pageDelta * (size.y_max - size.y_min));
 }
 
 void ConsoleComponent::write(const std::string& message, archipelago::MessageType type) {
@@ -139,5 +162,5 @@ void ConsoleComponent::writeLn(const std::string& message, archipelago::MessageT
     // Clear the last line
     lastLine.clear();
     // Scroll it into view
-    scrollTo(lines.size());
+    scrollY = consoleHeight - 1;
 }

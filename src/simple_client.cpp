@@ -23,7 +23,12 @@ void SimpleClient::addCommand(
     }
     if (!options.help.empty()) {
         // Add help
-        std::shared_ptr<CommandHelpData> helpData = std::make_shared<CommandHelpData>(CommandHelpData(name, options));
+        std::shared_ptr<CommandHelpData> helpData = std::make_shared<CommandHelpData>(CommandHelpData{
+            .name = name,
+            .basicHelp = options.help,
+            .arguments = options.arguments,
+            .detailedHelp = options.detailedHelp
+        });
         m_helpList.push_back(helpData);
         // Add the reference to this help to the m_helpData map
         m_helpData.insert({name, helpData});
@@ -94,26 +99,43 @@ const CommandFunction* SimpleClient::lookupCommand(const std::string& name) cons
     }
 }
 
-void SimpleClient::handleCommand(const std::string& command) {
+void SimpleClient::prompt(const std::string& prompt, const ReadStringCallbackFunction&& callback) {
+    write(prompt);
+    write(" ");
+    registerReadStringCallback(std::move(callback));
+}
+
+void SimpleClient::registerReadStringCallback(const ReadStringCallbackFunction&& callback) {
+    m_readStringCallback = callback;
+}
+
+void SimpleClient::receiveUserInput(const std::string& input) {
+    if (m_readStringCallback) {
+        m_readStringCallback(*this, input);
+        // Unset the callback
+        m_readStringCallback = nullptr;
+    } else if (isCommand(input)) {
+        dispatchCommand(input);
+    } else {
+        handleSay(input);
+    }
+}
+
+void SimpleClient::dispatchCommand(const std::string& command) {
     if (command.empty()) {
         return;
     }
-    // Only tokenize if this is a server command
-    if (command[0] == '/') {
-        std::vector<std::string> tokens;
-        tokenize<std::string>(command, tokens);
-        std::string command_name = tokens[0].substr(1);
-        // Look up the command
-        auto iter = m_commands.find(command_name);
-        if (iter == m_commands.end()) {
-            write("Unrecognized command ");
-            write(tokens[0]);
-            writeLn(": use /help to list commands.");
-        } else {
-            iter->second(*this, tokens);
-        }
+    std::vector<std::string> tokens;
+    tokenize<std::string>(command, tokens);
+    std::string command_name = tokens[0].substr(1);
+    // Look up the command
+    auto iter = m_commands.find(command_name);
+    if (iter == m_commands.end()) {
+        write("Unrecognized command ", MessageType::error);
+        write(tokens[0], MessageType::error);
+        writeLn(": use /help to list commands.", MessageType::error);
     } else {
-        handleSay(command);
+        iter->second(*this, tokens);
     }
 }
 
@@ -174,11 +196,22 @@ void SimpleClient::writeUsageHelp(const std::string& name, const std::string& er
 namespace commands {
 
 void connect(SimpleClient& client, const std::vector<std::string>& arguments) {
-    if (arguments.size() < 3 || arguments.size() > 4) {
+    if (arguments.size() < 2 || arguments.size() > 4) {
         client.writeUsageHelp(arguments[0]);
         return;
     }
     auto url = arguments[1];
+    if (arguments.size() < 3) {
+        // No player argument. Request it.
+        client.prompt("Player slot:", [url](SimpleClient& client, const std::string& input) {
+            try {
+                client.connect(url, input, nullptr);
+            } catch (const InvalidStateError&) {
+                client.write("Cannot connect: already connected.", MessageType::error);
+            }
+        });
+        return;
+    }
     auto player = arguments[2];
     const std::string* password = arguments.size() > 3 ? &(arguments[3]) : nullptr;
     try {

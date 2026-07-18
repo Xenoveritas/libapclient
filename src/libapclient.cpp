@@ -61,6 +61,7 @@ double ClientRoomInfo::get_remote_time_now() {
 
 Client::Client() {
 }
+
 Client::~Client() {
     if (m_socket != nullptr) {
         delete m_socket;
@@ -127,9 +128,9 @@ void Client::connect(const std::string& serverUrl, const std::string& playerName
 }
 
 void Client::disconnect_socket_run(std::promise<void> disconnect_promise) {
+    std::lock_guard lock(m_mutex);
     LIBAPCLIENT_LOG("Disconnecting...");
     m_socket->stop();
-    std::lock_guard lock(m_mutex);
     m_state = ClientState::disconnected;
     delete m_socket;
     m_socket = nullptr;
@@ -139,7 +140,7 @@ void Client::disconnect_socket_run(std::promise<void> disconnect_promise) {
 
 std::future<void> Client::disconnect() {
     std::lock_guard lock(m_mutex);
-    if (m_state == ClientState::disconnected) {
+    if (m_state <= ClientState::disconnecting || m_socket == nullptr) {
         throw InvalidStateError("Client already disconnected");
     }
     // So here's where things get... hairy.
@@ -152,8 +153,8 @@ std::future<void> Client::disconnect() {
     //
     // ix::~WebSocket() calls stop().
     //
-    // Soooo... fork a thread whose sole job is to call stop(), wait for it to
-    // return, grab the mutex, then delete the socket.
+    // Soooo... fork a thread whose sole job is to grab the mutex and call
+    // m_socket->stop().
     m_state = ClientState::disconnecting;
     std::promise<void> disconnect_promise;
     std::future<void> disconnect_future = disconnect_promise.get_future();

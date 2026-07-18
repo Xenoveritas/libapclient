@@ -10,6 +10,8 @@ void macos_log(const std::string& message) {
 }
 
 void macos_get_cache_path(std::u16string& str) {
+    // Who owns the result? This doesn't begin with new/alloc/copy, so the
+    // framework does. Also ARC will handle releasing it. Probably.
     NSArray* result = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
     if ([result count] < 1) {
         // oops
@@ -21,5 +23,4 @@ void macos_get_cache_path(std::u16string& str) {
     str.resize([path length]);
     // And copy
     [path getCharacters: reinterpret_cast<unichar*>(str.data()) range: NSMakeRange(0, [path length])];
-    [result release];
 }

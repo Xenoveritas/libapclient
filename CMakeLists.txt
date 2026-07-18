@@ -25,8 +25,15 @@ project ("libapclient"
 option(LIBAPCLIENT_SHARED "Compile libapclient as a shared library." OFF)
 option(LIBAPCLIENT_BUILD_EXAMPLE "Build the example Archipelago client program." OFF)
 option(LIBAPCLIENT_BUILD_TESTS "Build tests." OFF)
-# TLS will be required before this is usable. This is currently set to off to avoid having to configure that.
-option(LIBAPCLIENT_USE_TLS "Whether to enable TLS." OFF)
+option(LIBAPCLIENT_ENABLE_LOGGING "Enable logging to the system log" ON)
+# TLS is necessary to connect to the live Archipelago server.
+# Currently, enable it by default on Apple platforms (since IXWebSocket can use
+# macOS's TLS API)
+if (APPLE)
+    option(LIBAPCLIENT_USE_TLS "Whether to enable TLS." ON)
+else()
+    option(LIBAPCLIENT_USE_TLS "Whether to enable TLS." OFF)
+endif()
 
 # Add dependencies. Because this is intended to be used as a library with projects that
 # very well may use the same libraries (especially zlib), check if the targets already
@@ -64,8 +71,8 @@ if (NOT TARGET ixwebsocket)
     CPMAddPackage(
         NAME ixwebsocket
         GITHUB_REPOSITORY machinezone/IXWebSocket
-        GIT_TAG v12.0.0
-        VERSION 12.0.0
+        GIT_TAG v12.0.1
+        VERSION 12.0.1
         OPTIONS
             "USE_TLS ${LIBAPCLIENT_USE_TLS}"
             "IXWEBSOCKET_INSTALL OFF"
@@ -105,7 +112,9 @@ endif()
 
 add_library(libapclient ${LIBAPCLIENT_LINK_MODE} ${LIBAPCLIENT_SOURCES} ${LIBAPCLIENT_HEADERS})
 
-target_compile_definitions(libapclient PUBLIC "-DLIBAPCLIENT_ENABLE_LOGGING")
+if (LIBAPCLIENT_ENABLE_LOGGING)
+    target_compile_definitions(libapclient PUBLIC "-DLIBAPCLIENT_ENABLE_LOGGING")
+endif()
 target_include_directories(libapclient PUBLIC "include")
 target_link_libraries(libapclient PUBLIC nlohmann_json::nlohmann_json)
 target_link_libraries(libapclient PUBLIC ixwebsocket::ixwebsocket)

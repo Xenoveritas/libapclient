@@ -133,7 +133,7 @@ public:
  * \tparam I The class that holds the item info.
  * \tparam Allocator the allocator the underlying vector uses.
  */
-template<class I = packets::NetworkItem, class Allocator = std::allocator<I>> class ItemTracker {
+template<class I, class Allocator = std::allocator<I>> class BasicItemTracker {
 public:
     /*! \brief The index of the last item given to the player. */
     size_t index;
@@ -146,15 +146,15 @@ public:
 
     /*! \brief Create a new item tracker.
      */
-    ItemTracker() : index(0), items() {}
+    BasicItemTracker() : index(0), items() {}
     /*! \brief Create a new item tracker with the given index.
      */
-    ItemTracker(size_t aIndex) : index(aIndex), items() {}
+    BasicItemTracker(size_t aIndex) : index(aIndex), items() {}
 
-    ItemTracker& operator<<(const packets::ReceivedItems& receivedItems) {
+    BasicItemTracker& operator<<(const packets::ReceivedItems& receivedItems) {
         return operator+=(receivedItems.items);
     }
-    ItemTracker& operator+=(const std::vector<packets::NetworkItem>& newItems) {
+    BasicItemTracker& operator+=(const std::vector<packets::NetworkItem>& newItems) {
         // Preemptively prepare for this
         items.reserve(items.size() + newItems.size());
         for (auto& item : newItems) {
@@ -163,5 +163,7 @@ public:
         return *this;
     }
 };
+
+typedef BasicItemTracker<packets::NetworkItem> ItemTracker;
 
 }

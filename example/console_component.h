@@ -38,6 +38,10 @@ public:
         spans.clear();
     }
 
+    bool empty() {
+        return spans.empty();
+    }
+
     ftxui::Element Render();
 };
 
@@ -47,6 +51,7 @@ private:
     // Last line is kept separate to additional text can be written to it
     ConsoleLine lastLine;
     int scrollY;
+    int consoleHeight;
     ftxui::Box size;
 public:
     ConsoleComponent();
@@ -62,12 +67,21 @@ public:
     /*! \brief Scroll by the given delta
      * \param scrollDelta the number of lines to scroll
      */
-    void scrollBy(int scrollDelta);
+    void scrollByLine(int scrollDelta);
+
+    /*! \brief Move a given number of pages
+     * \param pageDelta the number of pages to move
+     */
+    void scrollByPage(int pageDelta);
 
     /*! \brief Scroll to the given line
      * \param line the line number to ensure is visible
      */
-    void scrollTo(int line);
+    //void scrollTo(int line);
+
+    inline int getHeight() {
+        return size.y_max - size.y_min + 1;
+    }
 
     /*! \brief Append the given text to the end of the last line.
      *
@@ -83,5 +97,7 @@ public:
      */
     void writeLn(const std::string& message = std::string(), archipelago::MessageType type = archipelago::MessageType::basic);
 };
+
+class InputWithHistory : public ftxui::ComponentBase {};
 
 #endif // _LIBAPCLIENT_CONSOLE_COMPONENT_H

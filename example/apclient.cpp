@@ -45,12 +45,23 @@ private:
     ftxui::Closure m_quitClosure;
     ftxui::App* m_app;
     std::string m_gameName;
+    std::string m_prompt;
+    std::string m_defaultPrompt;
     archipelago::GameData m_playerGameData;
     archipelago::LocationTracker<bool> m_locationTracker;
-    archipelago::ItemTracker<> m_itemTracker;
+    archipelago::ItemTracker m_itemTracker;
 
 public:
-    APClient() : archipelago::SimpleClient(), m_console(new ConsoleComponent()), m_app(nullptr), m_locationTracker(), m_itemTracker() {
+    APClient() :
+        archipelago::SimpleClient(),
+        m_console(new ConsoleComponent()),
+        m_app(nullptr),
+        m_locationTracker(),
+        m_itemTracker(),
+        m_prompt(),
+        m_defaultPrompt(">")
+    {
+        m_prompt = m_defaultPrompt;
         // Add our commands
         addCommand("quit", commandQuit, "exits the client");
         addAlias("exit", "quit");
@@ -107,7 +118,9 @@ public:
             sendGetDataPackage({ slotInfo->game });
         } else {
             m_gameName.clear();
-            writeLn("Did not see player in player data", archipelago::MessageType::basic);
+            write("Did not see player ", archipelago::MessageType::basic);
+            write(m_playerName, archipelago::MessageType::basic);
+            writeLn(" in player data", archipelago::MessageType::basic);
         }
         // Load up location data
         m_locationTracker << connected;
@@ -121,6 +134,16 @@ public:
 
     virtual void onDataPackage(const archipelago::packets::DataPackage& dataPackage) override {
         m_playerGameData.loadGame(dataPackage, m_gameName);
+    }
+
+    virtual void prompt(const std::string& prompt, const archipelago::ReadStringCallbackFunction&& callback) override {
+        m_prompt = prompt;
+        // Re-render the app
+        if (m_app != nullptr) {
+            m_app->RequestAnimationFrame();
+        }
+        LIBAPCLIENT_LOG("Setting prompt to [{}]", m_prompt);
+        registerReadStringCallback(std::move(callback));
     }
 
     void writeStatus() {
@@ -146,6 +169,9 @@ public:
         }
         write("Client state: ");
         switch (getUnlockedState()) {
+        case archipelago::ClientState::neverConnected:
+            writeLn("disconnected (never connected)");
+            break;
         case archipelago::ClientState::disconnected:
             writeLn("disconnected");
             break;
@@ -245,8 +271,10 @@ public:
         std::string command;
         auto input = ftxui::Input(&command) | ftxui::CatchEvent([&](ftxui::Event event) {
             if (event == ftxui::Event::Return) {
+                // Reset the prompt *here* before the command runs
+                m_prompt = m_defaultPrompt;
                 // Process the current command
-                handleCommand(command);
+                receiveUserInput(command);
                 command.clear();
                 return true;
             }
@@ -257,12 +285,18 @@ public:
         container->Add(input);
         container->SetActiveChild(input);
         auto renderer = ftxui::Renderer(container, [&] {
-            return container->Render();
+            return ftxui::vbox({
+                m_console->Render(),
+                ftxui::hbox({
+                    ftxui::text(m_prompt),
+                    ftxui::separatorEmpty(),
+                    input->Render()
+                })
+            });
         });
         auto screen = ftxui::App::Fullscreen();
         m_app = &screen;
         m_quitClosure = screen.ExitLoopClosure();
-        LIBAPCLIENT_LOG("Starting AP client app");
         screen.Loop(renderer);
     }
 
@@ -305,7 +339,7 @@ int main(int argc, char* argv[]) {
     // Required under Windows
     ix::initNetSystem();
 
-    auto app = APClient();
+    APClient app;
     app.run();
 
     return 0;

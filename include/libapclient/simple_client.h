@@ -21,6 +21,7 @@ class SimpleClient;
  *        argument used to start the command (so arguments[0] = "/command")
  */
 typedef std::function<void(SimpleClient&, const std::vector<std::string>&)> CommandFunction;
+typedef std::function<void(SimpleClient&, const std::string&)> ReadStringCallbackFunction;
 
 enum class MessageType {
     basic,
@@ -56,17 +57,12 @@ struct CommandOptions {
 
 /*! \brief Metadata containing help for a command.
  */
-class CommandHelpData {
-public:
+struct CommandHelpData {
     std::string name;
     std::vector<std::string> aliases;
     std::string basicHelp;
     std::string arguments;
     std::string detailedHelp;
-    CommandHelpData(
-        const std::string& aName,
-        const CommandOptions& options
-    ) : name(aName), aliases(), basicHelp(options.help), arguments(options.arguments), detailedHelp(options.detailedHelp) {}
 
     void addAlias(const std::string& name) { aliases.push_back(name); }
 };
@@ -83,8 +79,10 @@ private:
     std::vector<std::shared_ptr<CommandHelpData>> m_helpList;
     /// \brief A map of names to corresponding help metadata.
     std::unordered_map<std::string, std::shared_ptr<CommandHelpData>> m_helpData;
+    /// \brief A callback function that may or may not be set
+    ReadStringCallbackFunction m_readStringCallback;
 public:
-    SimpleClient(bool bindDefaults = true) : Client() {
+    SimpleClient(bool bindDefaults = true) : Client(), m_commands(), m_helpList(), m_helpData(), m_readStringCallback() {
         if (bindDefaults) {
             addDefaultCommands();
         }
@@ -93,7 +91,7 @@ public:
     /*! \brief Adds the default commands to the client.
      *
      * The following commands are added:
-     * 
+     *
      * | Name       | Implementation                                                                        |
      * |------------|---------------------------------------------------------------------------------------|
      * | help       | commands::help(SimpleClient& client, const std::vector<std::string>& arguments)       |
@@ -196,7 +194,7 @@ public:
     void logError(const std::string& message) override {
         writeLn(message, MessageType::error);
     }
-    
+
     /*! \brief Trapped to write "disconnected" to the console.
      */
     virtual void onWebSocketDisconnect() override {
@@ -217,6 +215,23 @@ public:
         }
         writeLn();
     }
+
+    /*! \brief Prompt for a string.
+     *
+     * The default will call write() with the prompt string (and then a single
+     * space) and then call
+     * registerReadStringCallback(const ReadStringCallbackFunction&).
+     *
+     * \param callback the callback to register
+     */
+    virtual void prompt(const std::string& prompt, const ReadStringCallbackFunction&& callback);
+
+    /*! \brief Register a callback to receive the next string given to
+     * receiveUserInput(const std::string&).
+     *
+     * \param callback the callback to register
+     */
+    void registerReadStringCallback(const ReadStringCallbackFunction&& callback);
 
     /*! \brief Write out usage help for the given command.
      *
@@ -243,13 +258,13 @@ public:
     virtual bool isCommand(const std::string& command) const {
         return command.size() >= 1 && command[0] == '/';
     }
-    
+
     /*! \brief Sanitize a command name, removing whatever command prefix from
      * the name.
      *
      * The default implementation chbcks if the first character is a '/' and
      * removes it if it is.
-     * 
+     *
      * This is used to santize command names given to any of the command
      * lookup functions.
      */
@@ -261,12 +276,28 @@ public:
         return view;
     }
 
-    /*! \brief handle a comment
+    /*! \brief Handle user input, dispatching a command if necessary.
      *
-     * Parses an incoming command, dispatching it as appropriate.
+     * This will pass off user input to the appropriate internal handler. For
+     * example, /connect <url> needs a slot name and potentially a password.
+     * It uses registerReadStringCallback() to do that. If a callback has been
+     * registered, this passes off to it and unregisters the callback.
+     * Otherwise, it passes to dispatchCommand(const std::string&).
+     *
+     * \param input the user input
+     */
+    void receiveUserInput(const std::string& input);
+
+    /*! \brief Dispatch a command.
+     *
+     * Parses an incoming command, dispatching it as appropriate. This will
+     * **always** attempt to parse and dispatch a command.
+     *
+     * Generally speaking receiveUserInput(const std::string& input) should be
+     * used instead.
      * \param command the command to parse
      */
-    void handleCommand(const std::string& command);
+    void dispatchCommand(const std::string& command);
 
     /*! \brief handle a message that doesn't trigger a client command.
      *
@@ -336,7 +367,7 @@ public:
     }
 
     /*! \brief Run the client, reading from the input stream and passing
-     * commands off to handleCommand.
+     * commands off to receiveUserInput(const std::string&).
      */
     void run() {
         std::string str;
@@ -347,7 +378,7 @@ public:
                 break;
             }
             // Pass off to the command parser.
-            SimpleClient::handleCommand(str);
+            SimpleClient::receiveUserInput(str);
         }
     }
 };

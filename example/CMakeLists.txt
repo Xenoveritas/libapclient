@@ -18,6 +18,11 @@ add_executable(apclient
 target_link_libraries(apclient PRIVATE libapclient)
 target_link_libraries(apclient PRIVATE ftxui::ftxui)
 
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET apclient PROPERTY CXX_STANDARD 20)
-endif()
+# Demo very simple client (basic terminal, nothing fancy)
+add_executable(simpleclient
+    "simple_client.cpp"
+)
+target_link_libraries(simpleclient PRIVATE libapclient)
+
+set_property(TARGET apclient PROPERTY CXX_STANDARD 20)
+set_property(TARGET simpleclient PROPERTY CXX_STANDARD 20)
