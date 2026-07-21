@@ -1,3 +1,4 @@
+/*! \file simple_client.cpp */
 #include "libapclient/simple_client.h"
 #include "libapclient/tokenizer.h"
 
@@ -190,6 +191,44 @@ void SimpleClient::writeUsageHelp(const std::string& name, const std::string& er
     }
     if (!error.empty()) {
         writeLn(error, MessageType::error);
+    }
+}
+
+TerminalClient::TerminalClient(
+    std::istream& inStream,
+    std::ostream& outStream
+) : SimpleClient(), m_in(inStream), m_out(outStream), m_running(false), m_prompt(">") {
+    addCommand("exit", [this](SimpleClient&, const std::vector<std::string>& arguments) {
+        this->m_running = false;
+    }, "exit the client");
+    addAlias("quit", "exit");
+}
+
+void TerminalClient::write(const std::string& message, MessageType type) {
+    m_out << message;
+}
+
+void TerminalClient::writeLn(const std::string& message, MessageType type) {
+    m_out << message << std::endl;
+}
+
+void TerminalClient::prompt(const std::string& prompt, const ReadStringCallbackFunction&& callback) {
+    m_prompt = prompt;
+    SimpleClient::registerReadStringCallback(std::move(callback));
+}
+
+void TerminalClient::run() {
+    std::string str;
+    m_running = true;
+    while(m_running) {
+        m_out << m_prompt << " " << std::flush;
+        if (!std::getline(m_in, str)) {
+            break;
+        }
+        // After getting a line, reset the prompt
+        m_prompt = ">";
+        // Pass off to the command parser.
+        SimpleClient::receiveUserInput(str);
     }
 }
 

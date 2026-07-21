@@ -339,48 +339,33 @@ private:
     std::istream& m_in;
     std::ostream& m_out;
     bool m_running;
+    std::string m_prompt;
 public:
-    TerminalClient(
-        std::istream& inStream,
-        std::ostream& outStream
-    ) : SimpleClient(), m_in(inStream), m_out(outStream), m_running(false) {
-        addCommand("exit", [this](SimpleClient&, const std::vector<std::string>& arguments) {
-            this->m_running = false;
-        }, "exit the client");
-        addAlias("quit", "exit");
-    }
+    TerminalClient(std::istream& inStream, std::ostream& outStream);
 
     /*! \brief Generic write.
      *
      * \param message the text to write to the client terminal
      */
-    virtual void write(const std::string& message, MessageType type = MessageType::basic) override {
-        m_out << message;
-    }
+    virtual void write(const std::string& message, MessageType type = MessageType::basic) override;
 
     /*! \brief Write a line, ending with a newline, to the client.
      *
      * \param message the message to write
      */
-    virtual void writeLn(const std::string& message, MessageType type = MessageType::basic) override {
-        m_out << message << std::endl;
-    }
+    virtual void writeLn(const std::string& message, MessageType type = MessageType::basic) override;
+
+    /*! \brief Sets the prompt and then registers the callback.
+     *
+     * \param prompt the prompt
+     * \param callback the callback to register
+     */
+    virtual void prompt(const std::string& prompt, const ReadStringCallbackFunction&& callback) override;
 
     /*! \brief Run the client, reading from the input stream and passing
      * commands off to receiveUserInput(const std::string&).
      */
-    void run() {
-        std::string str;
-        m_running = true;
-        while(m_running) {
-            m_out << "> " << std::flush;
-            if (!std::getline(m_in, str)) {
-                break;
-            }
-            // Pass off to the command parser.
-            SimpleClient::receiveUserInput(str);
-        }
-    }
+    void run();
 };
 
 } // namespace archipelago
