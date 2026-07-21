@@ -34,6 +34,23 @@ TEST(DataPackage, testCheckRoomInfo) {
     EXPECT_THAT(cache.findMissingGames(), testing::UnorderedElementsAre("Other Game", "Test Game"));
 }
 
+TEST(IDMap, testAPIs) {
+    archipelago::IDMap<int, std::string> idMap;
+    std::string obj1{"Test 1"}, obj2{"Another object"};
+    EXPECT_TRUE(idMap.empty());
+    idMap.insert(1, obj1);
+    EXPECT_FALSE(idMap.empty());
+    idMap.insert(3, obj2);
+    EXPECT_EQ(idMap.getById(4), nullptr);
+    const std::string* actual = idMap.getById(1);
+    // should be copied on insert
+    EXPECT_EQ(*actual, obj1);
+    EXPECT_EQ(idMap.getByObject(std::string("Other object")), std::nullopt);
+    EXPECT_THAT(idMap.getByObject(obj1), testing::Optional(1));
+    EXPECT_THAT(idMap.getIDs(), testing::ElementsAre(1, 3));
+    EXPECT_THAT(idMap.getObjects(), testing::ElementsAre(obj1, obj2));
+}
+
 TEST(GameData, testParse) {
     json j = json::parse("{\"item_name_to_id\":{\"First Item\":1,\"Second Item\":2},\"location_name_to_id\":{\"First Location\":10,\"Second Location\":20}}");
     archipelago::GameData data;

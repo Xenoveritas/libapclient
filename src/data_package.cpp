@@ -1,4 +1,5 @@
-/*! \file Implementation of data package-related code. */
+/*! \file data_package.cpp
+ * \brief Implementation of data package-related code. */
 #include "libapclient/tracker.h"
 #include "libapclient/data_package.h"
 #include "libapclient/logger.h"
@@ -37,6 +38,12 @@ GameData& GameData::operator<<(const json& gamePackage) {
     iter = gamePackage.find("location_name_to_id");
     if (iter != gamePackage.end()) {
         populate<item_id_t>(locations, *iter);
+    }
+    iter = gamePackage.find("checksum");
+    if (iter != gamePackage.end()) {
+        if (iter.value().is_string()) {
+            checksum = static_cast<std::string>(iter.value());
+        }
     }
     return *this;
 }
@@ -81,6 +88,14 @@ std::optional<item_id_t> GameData::getItemID(const std::string& itemName) {
 
 std::optional<location_id_t> GameData::getLocationID(const std::string& locationName) {
     return locations.getByObject(locationName);
+}
+
+std::vector<item_id_t> GameData::getItemIDs() {
+    return items.getIDs();
+}
+
+std::vector<location_id_t> GameData::getLocationIDs() {
+    return locations.getIDs();
 }
 
 std::vector<std::string> GameData::getItemNames() {

@@ -14,6 +14,8 @@ namespace archipelago {
 /*! \brief A map of things to their IDs to a thing and also back.
  *
  * This is kind of specialized for GameData's use.
+ * \tparam ID the type for an ID
+ * \tparam T the type of object mapped to those IDs
  */
 template<typename ID, typename T> class IDMap {
 private:
@@ -51,6 +53,15 @@ public:
         return idToObject.empty();
     }
 
+    std::vector<ID> getIDs() {
+        std::vector<ID> result;
+        result.reserve(idToObject.size());
+        for (auto& pair : idToObject) {
+            result.push_back(pair.first);
+        }
+        return result;
+    }
+
     std::vector<T> getObjects() {
         std::vector<T> result;
         result.reserve(idToObject.size());
@@ -70,11 +81,28 @@ public:
  * However, some games may have additional data provided by the APWorld.
  */
 struct GameData {
+    /*! \brief Map of location IDs and location names. */
     IDMap<location_id_t, std::string> locations{};
+    /*! \brief Map of item IDs and item names. */
     IDMap<item_id_t, std::string> items{};
+    /*! \brief The checksum as provided by the server. */
     std::string checksum{};
 
+    /*! \brief Loads game data for the given JSON object.
+     *
+     * This expects the actual JSON object.
+     *
+     * \param gamePackage the associated JSON object for a game
+     */
     GameData& operator<<(const json& gamePackage);
+
+    /*! \brief Loads game data for the given game from the given data package.
+     *
+     * If the given game isn't in the data package, this does nothing.
+     *
+     * \param package a data package sent from the server
+     * \param gameName the name of the game
+     */
     void loadGame(const packets::DataPackage& package, const std::string& gameName);
 
     /*! \brief Gets the item name for the given ID.
@@ -134,7 +162,30 @@ struct GameData {
      */
     std::optional<location_id_t> getLocationID(const std::string& locationName);
 
+    /*! \brief Gets a list (sorted in ascending order) of all item IDs in the
+     * data package.
+     */
+    std::vector<item_id_t> getItemIDs();
+
+    /*! \brief Gets a list (sorted in ascending order) of all location IDs in the
+     * data package.
+     */
+    std::vector<location_id_t> getLocationIDs();
+
+    /*! \brief Gets a list (in no particular order) of all item names in the
+     * data package.
+     *
+     * (Technically these will be returned in the order of their IDs, but that's
+     * an implementation detail. No order is guaranteed.)
+     */
     std::vector<std::string> getItemNames();
+
+    /*! \brief Gets a list (in no particular order) of all location names in the
+     * data package.
+     *
+     * (Technically these will be returned in the order of their IDs, but that's
+     * an implementation detail. No order is guaranteed.)
+     */
     std::vector<std::string> getLocationNames();
 };
 
